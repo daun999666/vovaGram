@@ -138,7 +138,7 @@ migrateOwnerNumber();
 app.use(express.json({limit:"22mb"}));
 app.use("/uploads", express.static(uploadDir, { fallthrough:false, dotfiles:"deny", index:false }));
 app.use(express.static(path.join(__dirname,"public")));
-app.get("/api/health", (req,res)=>res.json({ok:true, app:"vovchikGram", version:"1.4.2"}));
+app.get("/api/health", (req,res)=>res.json({ok:true, app:"vovchikGram", version:"1.5.0"}));
 
 app.post("/api/register", (req,res)=>{
   const username = cleanUsername(req.body.username);
@@ -229,7 +229,21 @@ app.post("/api/dm",auth,(req,res)=>{
   res.json({chat:q("SELECT * FROM chats WHERE id=?").get(info.lastInsertRowid)});
 });
 app.get("/api/chats",auth,(req,res)=>{
+  // A direct chat's stored title belongs to the creator. Resolve the other
+  // participant for each viewer so both sides see the correct person.
   const chats=q(`SELECT c.*,m.role AS my_role,
+    CASE WHEN c.type='direct' THEN COALESCE(
+      (SELECT u.display_name FROM members peer JOIN users u ON u.id=peer.user_id
+       WHERE peer.chat_id=c.id AND peer.user_id<>m.user_id LIMIT 1), c.title)
+      ELSE c.title END AS display_title,
+    CASE WHEN c.type='direct' THEN COALESCE(
+      (SELECT u.avatar FROM members peer JOIN users u ON u.id=peer.user_id
+       WHERE peer.chat_id=c.id AND peer.user_id<>m.user_id LIMIT 1), c.avatar)
+      ELSE c.avatar END AS display_avatar,
+    CASE WHEN c.type='direct' THEN
+      (SELECT u.username FROM members peer JOIN users u ON u.id=peer.user_id
+       WHERE peer.chat_id=c.id AND peer.user_id<>m.user_id LIMIT 1)
+      ELSE NULL END AS peer_username,
     (SELECT body FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_message,
     (SELECT created_at FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_time
     FROM chats c JOIN members m ON m.chat_id=c.id WHERE m.user_id=? ORDER BY COALESCE(last_time,c.created_at) DESC`).all(req.user.id);
