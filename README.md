@@ -1,4 +1,4 @@
-# vovchikGram — build 1.4.1
+# vovchikGram — build 1.6.0
 
 Material You messenger for desktop browsers and mobile PWA. Server: Node.js + Express + Socket.IO + SQLite. The desktop EXE is packaged with `@yao-pkg/pkg`; Electron is not used.
 
@@ -70,3 +70,20 @@ On first launch, `@owner` and `@dev` are created only if their passwords are set
 - Image attachments are stored as message attachment metadata; existing message history is preserved by a safe SQLite column migration.
 - Softer Material 3 wallpapers and dimmed wallpaper continuity in the chat list.
 - Chat details now support removing a direct conversation, leaving a group/channel, and deleting owned spaces.
+
+
+## v1.6.0 — Workspace update
+
+- Added a collapsible right-side workspace panel inside chats with Tools, Search, Saved, and Settings tabs.
+- Added a dedicated message editor panel, context menu actions, local bookmarks, local pins, and multi-message selection.
+- Added per-chat local drafts, private notes, favorites, mute preferences, and archive visibility.
+- Added in-chat search over the currently loaded message history and plain-text chat export.
+- Added a basic forward-as-new-message action to another chat in the current chat list.
+- Added compact list, focus mode, preview visibility, interface scaling, Enter-to-send preference, and keyboard shortcuts (Alt+P, Ctrl/⌘+Enter, Esc).
+
+**v1.6 local-only data:** favorites, archive flags, mute preferences, notes, drafts, bookmarks, pins, and interface preferences are stored in the browser's local storage. They do not sync to other devices and are cleared if the browser's site data is cleared. Search scans the messages currently loaded in the open conversation (up to the server's existing history limit). Forwarding creates a new text message and does not preserve the original sender attribution or image attachments.
+
+
+## Windows quick launcher
+
+Run `Start-vovchikGram.bat`, paste the full path to the project folder (the folder containing `package.json`), and press Enter. The launcher checks for Node.js/npm, installs dependencies if needed, starts the server, and opens `http://localhost:8787` after the server responds. Keep the console window open while using the messenger. This is a batch launcher, not a compiled standalone EXE.
