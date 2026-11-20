@@ -82,3 +82,8 @@ On first launch, `@owner` and `@dev` are created only if their passwords are set
 - Added compact list, focus mode, preview visibility, interface scaling, Enter-to-send preference, and keyboard shortcuts (Alt+P, Ctrl/⌘+Enter, Esc).
 
 **v1.6 local-only data:** favorites, archive flags, mute preferences, notes, drafts, bookmarks, pins, and interface preferences are stored in the browser's local storage. They do not sync to other devices and are cleared if the browser's site data is cleared. Search scans the messages currently loaded in the open conversation (up to the server's existing history limit). Forwarding creates a new text message and does not preserve the original sender attribution or image attachments.
+
+
+## Windows quick launcher
+
+Run `Start-vovchikGram.bat`, paste the full path to the project folder (the folder containing `package.json`), and press Enter. The launcher checks for Node.js/npm, installs dependencies if needed, starts the server, and opens `http://localhost:8787` after the server responds. Keep the console window open while using the messenger. This is a batch launcher, not a compiled standalone EXE.
