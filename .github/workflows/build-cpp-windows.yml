@@ -1,0 +1,55 @@
+name: Build C++ Windows app
+
+on:
+  push:
+    branches: [v2.0.0-cpp]
+    paths:
+      - "desktop/cpp/**"
+      - ".github/workflows/build-cpp-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtwebengine
+          cache: true
+
+      - name: Configure
+        run: cmake -S desktop/cpp -B desktop/cpp/build -A x64 -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+
+      - name: Compile
+        run: cmake --build desktop/cpp/build --config Release
+
+      - name: Deploy Qt runtime
+        shell: pwsh
+        run: |
+          $exe = "desktop/cpp/build/Release/vovchikGram.exe"
+          if (!(Test-Path $exe)) { throw "C++ executable was not produced." }
+          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --qmldir desktop/cpp $exe
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed." }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "desktop/cpp/build/Release/*" -DestinationPath "vovchikGram-Cpp-Windows-x64.zip" -Force
+
+      - name: Upload C++ build
+        uses: actions/upload-artifact@v4
+        with:
+          name: vovchikGram-Cpp-Windows-x64
+          path: vovchikGram-Cpp-Windows-x64.zip
+          if-no-files-found: error
