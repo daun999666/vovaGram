@@ -155,3 +155,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .message-context-menu button{padding:9px 12px;text-align:left;border-radius:9px;background:transparent;color:var(--text);font-size:12px}
 .message-context-menu button:hover{background:var(--surface2)}
 .message.locally-pinned{outline:2px solid var(--primary);outline-offset:2px}
+
+/* Hide inline controls until a message is hovered; right-click opens the full menu. */
+.message .message-actions{opacity:0;transition:opacity .14s ease}
+.message:hover .message-actions,.message:focus-within .message-actions{opacity:1}
+@media(hover:none){.message .message-actions{opacity:0}}
