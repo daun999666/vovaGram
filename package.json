@@ -1,0 +1,42 @@
+{
+  "name": "vovchikgram",
+  "version": "1.4.2",
+  "private": true,
+  "description": "vovchikGram — Material You self-hosted messenger",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build:win": "pkg . --targets node22-win-x64 --output dist/vovchikGram.exe",
+    "build:linux": "pkg . --targets node22-linux-x64 --output dist/vovchikGram",
+    "build:mac": "pkg . --targets node22-macos-x64 --output dist/vovchikGram",
+    "check": "node --check server.js && node --check public/app.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.8.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.25.0"
+  },
+  "pkg": {
+    "scripts": [
+      "server.js"
+    ],
+    "assets": [
+      "public/**/*",
+      "node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+    ],
+    "targets": [
+      "node22-win-x64"
+    ]
+  },
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "bin": "server.js"
+}

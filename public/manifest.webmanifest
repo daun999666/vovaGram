@@ -1,0 +1,12 @@
+{
+  "name": "vovchikGram — общение без лишнего",
+  "short_name": "vovchikGram",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f8ff",
+  "theme_color": "#526da8",
+  "description": "Material You мессенджер без подписок",
+  "icons": [{"src":"/icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
