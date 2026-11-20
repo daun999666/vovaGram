@@ -160,3 +160,5 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .message .message-actions{opacity:0;transition:opacity .14s ease}
 .message:hover .message-actions,.message:focus-within .message-actions{opacity:1}
 @media(hover:none){.message .message-actions{opacity:0}}
+
+/* v1.6 workspace panel */
