@@ -149,3 +149,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .attachment-chip button{position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:50%;background:var(--surface3);color:var(--text)}
 .send-btn:disabled{opacity:.5;cursor:wait}
 @media(max-width:760px){.message-image-link{max-width:82vw}.message-image{max-height:330px}}
+
+/* v1.5.0 message context menu */
+.message-context-menu{position:fixed;z-index:1000;min-width:176px;padding:6px;background:var(--surface);border:1px solid var(--outline);border-radius:15px;box-shadow:0 12px 36px #10182835;display:flex;flex-direction:column;gap:2px;animation:pop .12s ease-out}
+.message-context-menu button{padding:9px 12px;text-align:left;border-radius:9px;background:transparent;color:var(--text);font-size:12px}
+.message-context-menu button:hover{background:var(--surface2)}
+.message.locally-pinned{outline:2px solid var(--primary);outline-offset:2px}
+
+/* Hide inline controls until a message is hovered; right-click opens the full menu. */
+.message .message-actions{opacity:0;transition:opacity .14s ease}
+.message:hover .message-actions,.message:focus-within .message-actions{opacity:1}
+@media(hover:none){.message .message-actions{opacity:0}}
