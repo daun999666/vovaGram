@@ -1,6 +1,6 @@
 {
   "name": "vovchikgram",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "private": true,
   "description": "vovchikGram — Material You self-hosted messenger",
   "main": "server.js",
