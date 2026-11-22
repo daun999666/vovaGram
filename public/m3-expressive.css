@@ -884,3 +884,19 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .media-panel.is-compact .media-timeline{margin-bottom:0}
 .media-panel .media-volume input{accent-color:var(--primary)}
 .message-date-divider{position:sticky;top:8px;z-index:2;backdrop-filter:blur(14px)}
+
+
+/* Connection, search history and command palette */
+.connection-status{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;padding:6px 10px;border-radius:999px;background:var(--surface-container);color:var(--muted);font-size:11px;font-weight:600}
+.connection-status i{width:7px;height:7px;display:block;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 14%,transparent)}
+.connection-status.is-online{color:#24845b}
+.connection-status.is-offline{color:var(--error,#b3261e)}
+.connection-status.is-connecting,.connection-status.is-unknown{color:var(--muted)}
+.recent-search-head{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;color:var(--muted);font-size:11px}
+.recent-search-head button{border:0;background:transparent;color:var(--primary);font:inherit;cursor:pointer}
+.recent-search-item,.command-item{display:flex;align-items:center;gap:12px;width:100%;padding:11px 14px;border:0;border-radius:13px;background:transparent;color:var(--on-surface);text-align:left;cursor:pointer;font:inherit}
+.recent-search-item:hover,.command-item:hover{background:var(--surface-container-high)}
+.recent-search-item .material-symbols-rounded,.command-item .material-symbols-rounded{color:var(--primary)}
+.command-search{width:100%;margin:0 0 12px;padding:12px 14px;border:1px solid var(--outline-variant);border-radius:14px;background:var(--surface-container);color:var(--on-surface);font:inherit}
+.command-item[hidden]{display:none}
+@media(max-width:680px){.connection-status{padding:5px 7px;font-size:0}.connection-status i{width:8px;height:8px}.top-actions{gap:4px}}
