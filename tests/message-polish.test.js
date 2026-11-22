@@ -1,0 +1,14 @@
+"use strict";
+const test=require("node:test");
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
+const css=fs.readFileSync(path.join(__dirname,"../public/message-polish.css"),"utf8");
+const js=fs.readFileSync(path.join(__dirname,"../public/message-polish.js"),"utf8");
+const html=fs.readFileSync(path.join(__dirname,"../public/index.html"),"utf8");
+test("message polish bundle parses",()=>{const cp=require("node:child_process").spawnSync(process.execPath,["--check",path.join(__dirname,"../public/message-polish.js")],{encoding:"utf8"});assert.equal(cp.status,0,cp.stderr||cp.stdout)});
+test("message polish contains 50 independently numbered refinements",()=>{assert.equal((css.match(/\/\* (?:[1-9]|[1-4][0-9]|50) \*\//g)||[]).length,50)});
+test("message bubbles remain content-sized and use stronger M3 typography",()=>{for(const s of ["width:fit-content!important","font-weight:600","max-width:min(100%,min(68ch,calc(100vw - 112px)))"])assert.ok(css.includes(s),s)});
+test("message action circle stays visible and sits outside the bubble",()=>{for(const s of [".message-menu-trigger{opacity:1!important","left:-38px;right:auto","right:-38px;left:auto"])assert.ok(css.includes(s),s)});
+test("message action menu supports accessible keyboard navigation",()=>{for(const s of ["aria-controls","aria-haspopup","ArrowDown","ArrowUp","Escape","Home","End","role","menuitem"])assert.ok(js.includes(s),s)});
+test("message polish assets are loaded after the base Material styles",()=>{assert.ok(html.includes("/message-polish.css"));assert.ok(html.includes("/message-polish.js"))});

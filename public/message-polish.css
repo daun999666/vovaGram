@@ -1,0 +1,52 @@
+/* vovchikGram message polish — 50 focused UI refinements */
+/* 01 */ .message.m3-message{position:relative!important;isolation:isolate}
+/* 02 */ .message.m3-message{width:fit-content!important}
+/* 03 */ .message.m3-message .message-content{width:fit-content;flex:0 1 auto}
+/* 04 */ .message.m3-message .message-content{min-width:0}
+/* 05 */ .message.m3-message .message-content{max-width:min(100%,min(68ch,calc(100vw - 112px)))}
+/* 06 */ .message.m3-message:not(.mine){margin-right:auto!important}
+/* 07 */ .message.m3-message.mine{margin-left:auto!important}
+/* 08 */ .message.m3-message:not(.mine) .message-content{border-radius:7px 22px 22px 22px}
+/* 09 */ .message.m3-message.mine .message-content{border-radius:22px 22px 7px 22px}
+/* 10 */ .message-content p{font-weight:600}
+/* 11 */ .message-content p{letter-spacing:-.012em}
+/* 12 */ .message-content p{line-height:1.52}
+/* 13 */ .message-content strong,.message-content b{font-weight:800}
+/* 14 */ .message-content a{color:var(--primary);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+/* 15 */ .message-content blockquote{margin:7px 0;padding:7px 10px;border-left:3px solid var(--primary);border-radius:4px 12px 12px 4px;background:color-mix(in srgb,var(--primary) 8%,var(--surface))}
+/* 16 */ .message-content .sender{font-size:12px;font-weight:800;letter-spacing:-.01em}
+/* 17 */ .message-avatar{flex-shrink:0}
+/* 18 */ .message-content .message-foot{min-height:15px;gap:8px}
+/* 19 */ .message-content time{font-variant-numeric:tabular-nums;font-weight:600}
+/* 20 */ .message-content .message-read{display:inline-grid;place-items:center;min-width:18px;min-height:18px}
+/* 21 */ .message-content .reactions{gap:6px;margin-top:7px}
+/* 22 */ .message-content .reaction{min-height:27px;padding:4px 10px;font-weight:700}
+/* 23 */ .message-content .reaction:hover{transform:translateY(-1px);filter:brightness(1.04)}
+/* 24 */ .message-menu-trigger{opacity:1!important;pointer-events:auto!important;transform:none!important}
+/* 25 */ .message-menu-trigger{width:30px;height:30px;border:1px solid var(--m3-outline);box-shadow:var(--m3-elevation-1)}
+/* 26 */ .message-menu-trigger:hover{transform:scale(1.06)!important;background:var(--m3-container-high)}
+/* 27 */ .message-menu-trigger:focus-visible{outline:3px solid var(--primary);outline-offset:3px}
+/* 28 */ .message.mine .message-menu-trigger{left:-38px;right:auto}
+/* 29 */ .message:not(.mine) .message-menu-trigger{right:-38px;left:auto}
+/* 30 */ .message-content .message-actions{border-radius:20px;padding:7px;backdrop-filter:blur(18px)}
+/* 31 */ .message:not(.mine) .message-actions{left:0;right:auto}
+/* 32 */ .message.mine .message-actions{right:0;left:auto}
+/* 33 */ .message-content .message-actions button{min-height:42px;border-radius:14px;font-weight:700}
+/* 34 */ .message-content .message-actions button .material-symbols-rounded{font-size:20px}
+/* 35 */ .message-content .message-actions button:hover{background:var(--m3-container-high)}
+/* 36 */ .message-content .message-actions button:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+/* 37 */ .message-content .message-quote-selection{max-width:220px;white-space:normal;line-height:1.35}
+/* 38 */ .message-content.vg-menu-up .message-actions{top:auto;bottom:calc(100% + 8px)}
+/* 39 */ .message.is-selected .message-content{outline:2px solid var(--primary);outline-offset:2px}
+/* 40 */ @media(max-width:600px){.message-menu-trigger{width:28px;height:28px}.message:not(.mine) .message-menu-trigger{right:-33px}.message.mine .message-menu-trigger{left:-33px}}
+/* 41 */ @media(prefers-reduced-motion:reduce){.message-content,.message-menu-trigger,.message-actions button{transition:none!important;animation:none!important}}
+/* 42 */ [data-theme=dark] .message-menu-trigger{background:var(--surface2);border-color:var(--m3-outline)}
+/* 43 */ .message-content .message-image-link,.message-content img{max-width:100%;height:auto}
+/* 44 */ .message-content video{display:block;max-width:min(100%,480px);border-radius:16px}
+/* 45 */ .message-content{overflow-wrap:anywhere;word-break:normal}
+/* 46 */ .message-content .emoji,.message-content img.emoji{vertical-align:-.12em}
+/* 47 */ .message-content ::selection{background:color-mix(in srgb,var(--primary) 28%,transparent)}
+/* 48 */ .message-content :focus-visible{outline-color:var(--primary);outline-offset:2px}
+/* 49 */ .messages>.message+.message{margin-top:1px!important}
+/* 50 */ .message-content .sender .message-role-chip{font-weight:800;letter-spacing:.01em}
+@media(max-width:600px){.message.m3-message{max-width:calc(100% - 42px)!important}.message.m3-message .message-content{max-width:100%}.message-content p{font-size:14px}.message-avatar,.message-avatar .sender-avatar{width:29px;height:29px}.message-avatar{flex-basis:29px}}
