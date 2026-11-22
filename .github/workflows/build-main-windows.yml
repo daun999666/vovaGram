@@ -1,0 +1,36 @@
+name: Build vovchikGram Windows EXE
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server.js"
+      - "public/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/build-main-windows.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Build Windows EXE
+        run: npm run build:win
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: vovchikGram-Windows-x64-v1.7.1
+          path: dist/vovchikGram.exe
+          if-no-files-found: error
