@@ -28,6 +28,13 @@ jobs:
           modules: qtwebengine
           cache: true
 
+      - name: Build bundled Node server
+        shell: pwsh
+        run: |
+          npm install
+          npm run build:win
+          if (!(Test-Path "dist/vovchikGram.exe")) { throw "Backend server executable was not produced." }
+
       - name: Configure
         run: cmake -S desktop/cpp -B desktop/cpp/build -A x64 -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
 
@@ -41,6 +48,7 @@ jobs:
           if (!(Test-Path $exe)) { throw "C++ executable was not produced." }
           & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --qmldir desktop/cpp $exe
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed." }
+          Copy-Item "dist/vovchikGram.exe" "desktop/cpp/build/Release/vovchikgram-server.exe" -Force
 
       - name: Package
         shell: pwsh
