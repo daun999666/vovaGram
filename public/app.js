@@ -57,7 +57,7 @@ function renderChats(){
  list.innerHTML=chats.map(c=>{
   const online=c.type==='direct'&&state.onlineUsers.has(Number(c.peer_user_id));
   const unread=Number(c.unread_count||0);
-  return '<button class="chat-item '+(state.active?.id===c.id?'active':'')+'" data-id="'+c.id+'">'+
+  return '<button class="chat-item '+(state.active?.id===c.id?'active':'')+'" data-id="'+c.id+'" data-sort-time="'+esc(c.last_time||'')+'">'+
    avatar(c.avatar,c.title,'chat-avatar')+
    '<span class="chat-meta"><b>'+esc(c.title)+' '+(c.type==='channel'?'<span class="tiny-verified">◉</span>':'')+(Number(c.is_pinned)?'<span class="chat-pin-mark"><span class="material-symbols-rounded">push_pin</span></span>':'')+(Number(c.is_starred)?'<span class="chat-favorite-mark">★</span>':'')+'</b>'+
    '<small>'+(online?'<i class="chat-presence-dot"></i>':'')+esc(c.last_message||c.description||'Пока нет сообщений')+'</small></span>'+
