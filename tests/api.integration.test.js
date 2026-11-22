@@ -295,6 +295,10 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(hiddenList.body.messages.length, 1);
   const unreadAfterHide = await request(baseUrl, ownerToken, "/api/chats");
   assert.equal(unreadAfterHide.body.chats.find(x => x.id === chatId).unread_count, 1);
+  const chatExport = await request(baseUrl, ownerToken, `/api/chats/${chatId}/export`);
+  assert.equal(chatExport.status, 200);
+  assert.equal(chatExport.body.messages.some(x => x.id === third.body.message.id), false);
+  assert.equal(chatExport.body.messages.some(x => x.id === first.body.message.id), true);
   const restored = await request(baseUrl, ownerToken, `/api/messages/${third.body.message.id}/hide`, { method: "DELETE" });
   assert.equal(restored.status, 200);
   const ownerVisibleAgain = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`);
@@ -377,6 +381,8 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
     method: "POST", body: JSON.stringify({ body: "intruder", scheduledAt: new Date(Date.now() + 60000).toISOString() })
   });
   assert.equal(deniedSchedule.status, 403);
+  const deniedExport = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/export`);
+  assert.equal(deniedExport.status, 403);
   const deniedHide = await request(baseUrl, outsider.body.token, `/api/messages/${third.body.message.id}/hide`, {
     method: "POST", body: "{}"
   });
