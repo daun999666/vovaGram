@@ -247,7 +247,7 @@ function addMessage(m,{prepend=false}={}){
   '<div class="message-content">'+forwardHeader+'<div class="sender"><b>'+esc(senderName)+'</b> '+badge(mine?state.user:m)+'</div>'+
   reply+(m.body?'<p>'+esc(m.body)+'</p>':'')+media+
   '<div class="message-foot"><time>'+time+(m.edited_at?' · изм.':'')+'</time>'+
-  (mine?'<span class="message-read" title="'+(Number(m.read_by_count)>0?'Прочитано':'Отправлено')+'">'+m3Icon(Number(m.read_by_count)>0?'done_all':'done')+'</span>':'')+
+  (mine?'<button type="button" class="message-read" data-readers title="'+(Number(m.read_by_count)>0?'Кто прочитал':'Отправлено')+'" aria-label="Кто прочитал">'+m3Icon(Number(m.read_by_count)>0?'done_all':'done')+'</button>':'')+
   forwardCount+'<span class="message-actions">'+
   '<button data-copy title="Копировать" aria-label="Копировать">'+m3Icon('content_copy')+'</button>'+
   '<button data-reply title="Ответить" aria-label="Ответить">'+m3Icon('reply')+'</button>'+
@@ -262,6 +262,7 @@ function addMessage(m,{prepend=false}={}){
  el.querySelector('[data-copy]').onclick=async()=>{try{await navigator.clipboard.writeText(m.body||'Изображение');toast('Скопировано')}catch{toast('Браузер запретил копирование')}};
  el.querySelector('[data-reply]').onclick=()=>setReply(m);
  el.querySelector('[data-save]').onclick=()=>saveMessage(m);
+ el.querySelector('[data-readers]')?.addEventListener('click',()=>openMessageReaders(m.id));
  el.querySelector('[data-hide-me]').onclick=()=>hideMessageForMe(m);
  el.querySelector('[data-forward]').onclick=()=>forwardMessage(m);
  el.querySelector('[data-history]')?.addEventListener('click',()=>openMessageHistory(m));
@@ -276,6 +277,13 @@ function addMessage(m,{prepend=false}={}){
 function setReply(m){state.replyTo=m.id;$('#replyBar').innerHTML=`<span>Ответ на <b>@${esc(m.username)}</b>: ${esc(m.body.slice(0,90))}</span><button id="cancelReply">×</button>`;$('#replyBar').classList.remove('hidden');$('#cancelReply').onclick=()=>{state.replyTo=null;$('#replyBar').classList.add('hidden')};$('#messageInput').focus()}
 async function editMessage(m){const text=prompt('Изменить сообщение:',m.body);if(text===null||!text.trim())return;try{await api('/api/messages/'+m.id,{method:'PATCH',body:JSON.stringify({body:text})})}catch(e){toast(e.message)}}
 async function deleteMessage(m){if(!confirm('Удалить сообщение?'))return;try{await api('/api/messages/'+m.id,{method:'DELETE'})}catch(e){toast(e.message)}}
+async function openMessageReaders(messageId){
+ try{
+  const result=await api('/api/messages/'+messageId+'/readers');
+  const rows=(result.readers||[]).map(user=>'<div class="m3-reaction-user">'+avatar(user.avatar,user.display_name,'result-avatar')+'<span><b>'+esc(user.display_name)+'</b><small>@'+esc(user.username)+' · '+new Date(String(user.read_at).replace(' ','T')+'Z').toLocaleString('ru-RU')+'</small></span></div>').join('');
+  modal('Прочитали сообщение',(result.readers||[]).length+' участников',rows?'<div class="m3-reaction-users">'+rows+'</div>':'<p class="empty">Пока никто из участников не прочитал это сообщение</p>');
+ }catch(e){toast(e.message)}
+}
 async function openReactionUsers(messageId,emoji){
  try{
   const result=await api('/api/messages/'+messageId+'/reactions?emoji='+encodeURIComponent(emoji));
