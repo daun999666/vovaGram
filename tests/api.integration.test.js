@@ -88,6 +88,24 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   });
   assert.equal(guest.status, 200, JSON.stringify(guest.body));
   const ownerToken = a.body.token, memberToken = b.body.token, guestToken = guest.body.token;
+  const secondLogin = await request(baseUrl, null, "/api/login", {
+    method: "POST", body: JSON.stringify({ username: "v2owner" + suffix, password: "test-password-123" })
+  });
+  assert.equal(secondLogin.status, 200);
+  const sessionList = await request(baseUrl, ownerToken, "/api/sessions");
+  assert.equal(sessionList.status, 200);
+  assert.equal(sessionList.body.sessions.length, 2);
+  assert.equal(sessionList.body.sessions.filter(x => x.current).length, 1);
+  const secondPayload = JSON.parse(Buffer.from(secondLogin.body.token.split(".")[1], "base64url").toString());
+  const secondSessions = await request(baseUrl, ownerToken, "/api/sessions");
+  const secondSessionId = secondPayload.sid;
+  const revoked = await request(baseUrl, ownerToken, "/api/sessions/" + secondSessionId, { method: "DELETE" });
+  assert.equal(revoked.status, 200);
+  const revokedCheck = await request(baseUrl, secondLogin.body.token, "/api/me");
+  assert.equal(revokedCheck.status, 401);
+  const currentStillWorks = await request(baseUrl, ownerToken, "/api/me");
+  assert.equal(currentStillWorks.status, 200);
+
 
   const direct = await request(baseUrl, ownerToken, "/api/dm", {
     method: "POST", body: JSON.stringify({ username: "v2member" + suffix })
