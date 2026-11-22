@@ -867,3 +867,20 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .send-as-channel .material-symbols-rounded{font-size:17px;color:var(--primary)}
 .channel-view-count{display:inline-flex;align-items:center;gap:3px;margin-left:8px;color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums}
 .channel-view-count .material-symbols-rounded{font-size:13px}
+
+
+/* Group administration and first-test interaction states */
+.m3-member-select{display:flex;align-items:center;justify-content:center;flex:0 0 26px}
+.m3-member-select input{width:17px;height:17px;accent-color:var(--primary);cursor:pointer}
+.m3-bulk-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.m3-event-row{display:flex;flex-direction:column;gap:4px;padding:11px 12px;border-bottom:1px solid var(--outline-variant);font-size:13px}
+.m3-event-row small{color:var(--muted);font-size:11px}
+.m3-event-row pre{max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:9px;border-radius:12px;background:var(--surface-container);font-size:11px}
+.m3-members-section .m3-member-row{gap:8px}
+.send-as-channel{display:flex;align-items:center;gap:9px;padding:8px 14px;margin:0 12px 8px;border:1px solid var(--outline-variant);border-radius:16px;background:var(--surface-container);font-size:12px;color:var(--on-surface-variant)}
+.send-as-channel input{accent-color:var(--primary);width:17px;height:17px}
+.send-as-channel .material-symbols-rounded{color:var(--primary)}
+.media-panel.is-compact .media-track-title{padding-bottom:3px}
+.media-panel.is-compact .media-timeline{margin-bottom:0}
+.media-panel .media-volume input{accent-color:var(--primary)}
+.message-date-divider{position:sticky;top:8px;z-index:2;backdrop-filter:blur(14px)}
