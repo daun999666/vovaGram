@@ -508,7 +508,7 @@ app.get("/api/channels/by-username/:username",auth,(req,res)=>{
 });
 app.get("/api/channels",auth,(req,res)=>{
   const search=String(req.query.q||"").trim().replace(/^@/,"").slice(0,64);
-  const like="%"+search.replace(/[\\%_]/g,"\\app.get("/api/chats/:id/messages",auth,(req,res)=>{")+"%";
+  const like="%"+search+"%";
   const channels=q(`SELECT c.id,c.title,c.description,c.avatar,c.username,c.created_at,
     (SELECT COUNT(*) FROM members m WHERE m.chat_id=c.id) AS member_count
     FROM chats c WHERE c.type='channel' AND c.username IS NOT NULL AND c.username<>'' 
@@ -538,7 +538,7 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
   if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
   const before=boundedInteger(req.query.before,0,0,Number.MAX_SAFE_INTEGER);
   const limit=boundedInteger(req.query.limit,50,1,100);
-  const select=`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+  const select=`SELECT m.id,m.chat_id,m.user_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
     m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
     (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
     CASE WHEN m.sender_as_channel=1 THEN NULL ELSE u.username END AS username,
