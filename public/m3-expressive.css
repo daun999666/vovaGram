@@ -1003,3 +1003,7 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
  :root[data-visual-style="liquid"] .chat-banner,:root[data-visual-style="liquid"] .composer,
  :root[data-visual-style="liquid"] .modal,:root[data-visual-style="liquid"] .message-content{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--surface2)}
 }
+
+@media(hover:none){
+ .message-content .message-actions{opacity:1}
+}
