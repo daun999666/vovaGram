@@ -61,7 +61,7 @@ function renderChats(){
    avatar(c.avatar,c.title,'chat-avatar')+
    '<span class="chat-meta"><b>'+esc(c.title)+' '+(c.type==='channel'?'<span class="tiny-verified">◉</span>':'')+(Number(c.is_pinned)?'<span class="chat-pin-mark"><span class="material-symbols-rounded">push_pin</span></span>':'')+(Number(c.is_starred)?'<span class="chat-favorite-mark">★</span>':'')+'</b>'+
    '<small>'+(online?'<i class="chat-presence-dot"></i>':'')+esc(c.last_message||c.description||'Пока нет сообщений')+'</small></span>'+
-   '<span class="chat-time">'+(c.last_time?new Date(c.last_time+'Z').toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'')+(unread?'<i class="chat-unread-badge">'+(unread>99?'99+':unread)+'</i>':'')+'<span class="chat-quick-action" data-chat-quick="'+c.id+'" role="button" tabindex="0" aria-label="Быстрые действия для '+esc(c.title)+'" title="Быстрые действия">⋯</span></span></button>';
+   '<span class="chat-time"><time class="chat-clock" datetime="'+(c.last_time?esc(new Date(c.last_time+'Z').toISOString()):'')+'">'+(c.last_time?new Date(c.last_time+'Z').toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'')+'</time>'+(unread?'<i class="chat-unread-badge">'+(unread>99?'99+':unread)+'</i>':'')+'<span class="chat-quick-action" data-chat-quick="'+c.id+'" role="button" tabindex="0" aria-label="Быстрые действия для '+esc(c.title)+'" title="Быстрые действия">⋯</span></span></button>';
  }).join('')||'<div class="empty">Здесь пока нет чатов</div>';
  list.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{openChat(+b.dataset.id);$('#sidebar').classList.remove('open')});
  list.querySelectorAll('[data-chat-quick]').forEach(action=>{
