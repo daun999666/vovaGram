@@ -763,3 +763,23 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 
 .message-read{border:0;background:transparent;padding:0 3px;cursor:pointer;border-radius:var(--m3-shape-full)}
 .message-read:hover{background:var(--surface3)}
+
+
+/* Document and video message attachments */
+.message-file-card{
+ display:flex;align-items:center;gap:12px;width:min(420px,70vw);min-width:0;
+ padding:11px 13px;border-radius:17px;background:var(--surface2);
+ border:1px solid color-mix(in srgb,var(--outline) 65%,transparent);
+ color:var(--text);text-decoration:none;transition:background .18s ease,transform .18s ease;
+}
+.message-file-card:hover{background:var(--surface3);transform:translateY(-1px)}
+.message-file-card>.material-symbols-rounded:first-child{font-size:26px;color:var(--primary);flex:none}
+.message-file-card>.material-symbols-rounded:last-child{font-size:20px;color:var(--muted);flex:none}
+.message-file-card>span:nth-child(2){display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.message-file-card b,.message-file-card small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.message-file-card b{font-size:12px}
+.message-file-card small{font-size:10px;color:var(--muted)}
+.message-video{display:block;width:min(520px,70vw);max-height:330px;border-radius:18px;background:#08090d;object-fit:contain}
+.attachment-chip .attachment-file-icon{display:grid;place-items:center;width:44px;height:44px;flex:none;border-radius:12px;background:var(--surface3);color:var(--primary);font-size:23px}
+.attachment-chip>span:not(.attachment-file-icon){min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:600px){.message-file-card{width:min(340px,72vw)}.message-video{width:min(360px,78vw);max-height:240px}}
