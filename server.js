@@ -136,6 +136,7 @@ function ensureColumn(table, column, definition) {
 }
 ensureColumn("chats","avatar","TEXT DEFAULT ''");
 ensureColumn("chats","wallpaper","TEXT DEFAULT ''");
+ensureColumn("chats","slow_mode_seconds","INTEGER DEFAULT 0");
 ensureColumn("messages","reply_to","INTEGER");
 ensureColumn("messages","edited_at","TEXT");
 ensureColumn("messages","reactions","TEXT DEFAULT '{}'");
@@ -755,13 +756,23 @@ app.post("/api/chats/:id/messages",auth,(req,res)=>{
   if(!body&&!validAttachments.length) return res.status(400).json({error:"Добавь текст или изображение"});
   const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
   if(!membership) return res.status(403).json({error:"Нет доступа"});
-  const chatType=q("SELECT type FROM chats WHERE id=?").get(id)?.type;
+  const chat=q("SELECT type,slow_mode_seconds FROM chats WHERE id=?").get(id);
+  const chatType=chat?.type;
   if(chatType==="direct"){
     const other=q("SELECT user_id FROM members WHERE chat_id=? AND user_id<>? LIMIT 1").get(id,req.user.id);
     if(other&&q("SELECT 1 FROM blocked_users WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)").get(req.user.id,other.user_id,other.user_id,req.user.id))
       return res.status(403).json({error:"Нельзя отправить сообщение: один из участников заблокировал другого"});
   }
   if(chatType==="channel" && !["owner","admin"].includes(membership.role) && !["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Публиковать в канале могут только администраторы"});
+  const slowMode=Number(chat?.slow_mode_seconds)||0;
+  if(chatType==="group"&&slowMode>0&&!["owner","admin"].includes(membership.role)&&!["owner","dev"].includes(req.user.role)){
+    const previous=q("SELECT created_at FROM messages WHERE chat_id=? AND user_id=? ORDER BY id DESC LIMIT 1").get(id,req.user.id);
+    if(previous){
+      const elapsed=Math.floor((Date.now()-Date.parse(previous.created_at+"Z"))/1000);
+      const retryAfter=Math.max(0,slowMode-(Number.isFinite(elapsed)?elapsed:slowMode));
+      if(retryAfter>0) return res.status(429).json({error:"Медленный режим: подожди ещё "+retryAfter+" сек.",retryAfter});
+    }
+  }
   const replyTo=Number(req.body.replyTo)||null;
   if(replyTo && !q("SELECT id FROM messages WHERE id=? AND chat_id=?").get(replyTo,id)) return res.status(400).json({error:"Сообщение для ответа не найдено"});
   const info=q("INSERT INTO messages(chat_id,user_id,body,reply_to,attachments) VALUES(?,?,?,?,?)").run(id,req.user.id,body,replyTo,JSON.stringify(validAttachments));
@@ -846,7 +857,11 @@ app.patch("/api/chats/:id",auth,(req,res)=>{
   const id=Number(req.params.id), member=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
   if(!member) return res.status(403).json({error:"Нет доступа"});
   if(!["owner","admin"].includes(member.role) && !["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Недостаточно прав"});
-  q("UPDATE chats SET title=?,description=?,avatar=?,wallpaper=? WHERE id=?").run(String(req.body.title||"").trim().slice(0,60),String(req.body.description||"").slice(0,250),String(req.body.avatar||"").slice(0,200),String(req.body.wallpaper||"").slice(0,200),id);
+  const current=q("SELECT slow_mode_seconds FROM chats WHERE id=?").get(id);
+  const slowModeSeconds=req.body.slowModeSeconds===undefined?Number(current?.slow_mode_seconds)||0:Number(req.body.slowModeSeconds);
+  if(![0,5,10,30,60].includes(slowModeSeconds)) return res.status(400).json({error:"Недопустимое значение медленного режима"});
+  q("UPDATE chats SET title=?,description=?,avatar=?,wallpaper=?,slow_mode_seconds=? WHERE id=?")
+    .run(String(req.body.title||"").trim().slice(0,60),String(req.body.description||"").slice(0,250),String(req.body.avatar||"").slice(0,200),String(req.body.wallpaper||"").slice(0,200),slowModeSeconds,id);
   res.json({chat:q("SELECT * FROM chats WHERE id=?").get(id)});
 });
 app.delete("/api/chats/:id",auth,(req,res)=>{
