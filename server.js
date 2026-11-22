@@ -138,6 +138,16 @@ ensureColumn("chats","avatar","TEXT DEFAULT ''");
 ensureColumn("chats","wallpaper","TEXT DEFAULT ''");
 ensureColumn("chats","slow_mode_seconds","INTEGER DEFAULT 0");
 ensureColumn("chats","username","TEXT");
+ensureColumn("chats","new_member_restriction_seconds","INTEGER DEFAULT 0");
+ensureColumn("members","joined_at","TEXT DEFAULT CURRENT_TIMESTAMP");
+db.exec("CREATE TABLE IF NOT EXISTS chat_events (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,actor_id INTEGER,event_type TEXT NOT NULL,target_id INTEGER,details TEXT DEFAULT '{}',created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_chat_events_chat ON chat_events(chat_id,id DESC)");
+db.exec("CREATE TABLE IF NOT EXISTS chat_settings_history (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,actor_id INTEGER NOT NULL,changes TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_chat_settings_history_chat ON chat_settings_history(chat_id,id DESC)");
+db.exec("CREATE TABLE IF NOT EXISTS chat_member_restrictions (chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,restricted_until INTEGER NOT NULL,restricted_by INTEGER NOT NULL,PRIMARY KEY(chat_id,user_id))");
+db.exec(`CREATE TRIGGER IF NOT EXISTS log_chat_member_join AFTER INSERT ON members BEGIN INSERT INTO chat_events(chat_id,event_type,target_id) VALUES(NEW.chat_id,'member_joined',NEW.user_id); END`);
+db.exec(`CREATE TRIGGER IF NOT EXISTS log_chat_member_leave AFTER DELETE ON members BEGIN INSERT INTO chat_events(chat_id,event_type,target_id) VALUES(OLD.chat_id,'member_left',OLD.user_id); END`);
+db.exec(`CREATE TRIGGER IF NOT EXISTS log_chat_member_role AFTER UPDATE OF role ON members WHEN OLD.role<>NEW.role BEGIN INSERT INTO chat_events(chat_id,event_type,target_id,details) VALUES(NEW.chat_id,'member_role_changed',NEW.user_id,json_object('from',OLD.role,'to',NEW.role)); END`);
 ensureColumn("messages","sender_as_channel","INTEGER DEFAULT 0");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_username ON chats(username COLLATE NOCASE) WHERE username IS NOT NULL AND username<>''");
 db.exec("CREATE TABLE IF NOT EXISTS channel_post_views (message_id INTEGER NOT NULL,user_id INTEGER NOT NULL,viewed_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(message_id,user_id))");
@@ -929,18 +939,26 @@ app.patch("/api/chats/:id",auth,(req,res)=>{
   const id=Number(req.params.id), member=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
   if(!member) return res.status(403).json({error:"Нет доступа"});
   if(!["owner","admin"].includes(member.role) && !["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Недостаточно прав"});
-  const current=q("SELECT slow_mode_seconds,username,type FROM chats WHERE id=?").get(id);
+  const current=q("SELECT * FROM chats WHERE id=?").get(id);
   const slowModeSeconds=req.body.slowModeSeconds===undefined?Number(current?.slow_mode_seconds)||0:Number(req.body.slowModeSeconds);
   if(![0,5,10,30,60].includes(slowModeSeconds)) return res.status(400).json({error:"Недопустимое значение медленного режима"});
+  const restriction=req.body.newMemberRestrictionSeconds===undefined?Number(current?.new_member_restriction_seconds)||0:Number(req.body.newMemberRestrictionSeconds);
+  if(![0,60,300,900,3600,86400].includes(restriction)) return res.status(400).json({error:"Недопустимое ограничение для новых участников"});
   let channelUsername=current?.username||"";
   if(current?.type==="channel"&&req.body.username!==undefined){
     channelUsername=String(req.body.username||"").trim().replace(/^@/,"").toLowerCase();
     if(channelUsername&&!/^[a-z0-9_]{5,32}$/.test(channelUsername)) return res.status(400).json({error:"Юзернейм канала: 5–32 символа, латиница, цифры и _"});
     if(channelUsername&&q("SELECT 1 FROM chats WHERE username=? COLLATE NOCASE AND id<>?").get(channelUsername,id)) return res.status(409).json({error:"Этот юзернейм канала уже занят"});
   }
-  q("UPDATE chats SET title=?,description=?,avatar=?,wallpaper=?,slow_mode_seconds=?,username=? WHERE id=?")
-    .run(String(req.body.title||"").trim().slice(0,60),String(req.body.description||"").slice(0,250),String(req.body.avatar||"").slice(0,200),String(req.body.wallpaper||"").slice(0,200),slowModeSeconds,channelUsername||null,id);
-  res.json({chat:q("SELECT * FROM chats WHERE id=?").get(id)});
+  const next={title:String(req.body.title||"").trim().slice(0,60),description:String(req.body.description||"").slice(0,250),avatar:String(req.body.avatar||"").slice(0,200),wallpaper:String(req.body.wallpaper||"").slice(0,200),slowModeSeconds,newMemberRestrictionSeconds:restriction,username:channelUsername||null};
+  const previous={title:current.title,description:current.description,avatar:current.avatar,wallpaper:current.wallpaper,slowModeSeconds:Number(current.slow_mode_seconds)||0,newMemberRestrictionSeconds:Number(current.new_member_restriction_seconds)||0,username:current.username||null};
+  const changes=Object.fromEntries(Object.keys(next).filter(key=>next[key]!==previous[key]).map(key=>[key,{from:previous[key],to:next[key]}]));
+  db.transaction(()=>{
+    q("UPDATE chats SET title=?,description=?,avatar=?,wallpaper=?,slow_mode_seconds=?,username=?,new_member_restriction_seconds=? WHERE id=?").run(next.title,next.description,next.avatar,next.wallpaper,slowModeSeconds,next.username,restriction,id);
+    if(Object.keys(changes).length)q("INSERT INTO chat_settings_history(chat_id,actor_id,changes) VALUES(?,?,?)").run(id,req.user.id,JSON.stringify(changes));
+  })();
+  if(Object.keys(changes).length)io.to("chat:"+id).emit("chat-settings-updated",{chatId:id,actorId:req.user.id,changes});
+  res.json({chat:q("SELECT * FROM chats WHERE id=?").get(id),changes});
 });
 app.delete("/api/chats/:id",auth,(req,res)=>{
   const id=Number(req.params.id);
