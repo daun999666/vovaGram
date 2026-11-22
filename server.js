@@ -181,7 +181,7 @@ function migrateOwnerNumber() {
 }
 migrateOwnerNumber();
 
-app.use(express.json({limit:"22mb"}));
+app.use(express.json({limit:"32mb"}));
 app.use("/uploads", express.static(uploadDir, { fallthrough:false, dotfiles:"deny", index:false }));
 // Serve the installed Material Web Components package as same-origin assets.
 app.use("/vendor/material", express.static(path.join(__dirname,"node_modules","material","dist"), { fallthrough:false, dotfiles:"deny", index:false }));
@@ -549,7 +549,7 @@ app.delete("/api/messages/:id/save",auth,(req,res)=>{
 app.post("/api/chats/:id/messages",auth,(req,res)=>{
   const id=Number(req.params.id), body=sanitizeMessageBody(req.body.body,4000);
   const attachments=Array.isArray(req.body.attachments)?req.body.attachments.slice(0,8):[];
-  const validAttachments=attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"image")).map(a=>({url:a.url,mime:String(a.mime||"").slice(0,80),name:String(a.name||"image").slice(0,120)}));
+  const validAttachments=attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"attachment")).map(a=>({url:a.url,mime:String(a.mime||"").slice(0,80),name:String(a.name||"attachment").slice(0,120),size:Math.max(0,Math.min(25*1024*1024,Number(a.size)||0))}));
   if(!body&&!validAttachments.length) return res.status(400).json({error:"Добавь текст или изображение"});
   const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
   if(!membership) return res.status(403).json({error:"Нет доступа"});
@@ -791,17 +791,51 @@ app.post("/api/messages/:id/reaction",auth,(req,res)=>{
   io.to("chat:"+m.chat_id).emit("reaction-updated",{id,reactions}); res.json({reactions});
 });
 app.post("/api/upload",auth,(req,res)=>{
-  const data=String(req.body.data||""), kind=String(req.body.kind||"");
-  const match=data.match(/^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);
+  const data=String(req.body.data||""),kind=String(req.body.kind||"");
+  const match=data.match(/^data:([a-z0-9.+-]+\\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);
   if(!match) return res.status(400).json({error:"Некорректный файл"});
-  const mime=match[1].toLowerCase(), allowed=kind==="audio"?/^audio\/(mpeg|ogg|wav|mp4|aac|flac|webm)$/:kind==="image"?/^image\/(png|jpeg|webp|gif)$/:null;
-  if(!allowed || !allowed.test(mime)) return res.status(415).json({error:"Этот формат файла не поддерживается"});
-  const buffer=Buffer.from(match[2],"base64"), limit=kind==="audio"?15*1024*1024:5*1024*1024;
-  if(!buffer.length || buffer.length>limit) return res.status(413).json({error:kind==="audio"?"Аудио должно быть до 15 МБ":"Изображение должно быть до 5 МБ"});
-  const signatures={"image/png":()=>buffer.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),"image/jpeg":()=>buffer[0]===0xff&&buffer[1]===0xd8&&buffer[2]===0xff,"image/gif":()=>buffer.subarray(0,3).toString()==="GIF","image/webp":()=>buffer.subarray(0,4).toString()==="RIFF"&&buffer.subarray(8,12).toString()==="WEBP","audio/ogg":()=>buffer.subarray(0,4).toString()==="OggS","audio/wav":()=>buffer.subarray(0,4).toString()==="RIFF","audio/flac":()=>buffer.subarray(0,4).toString()==="fLaC","audio/mp4":()=>buffer.subarray(4,8).toString()==="ftyp","audio/mpeg":()=>buffer.subarray(0,3).toString()==="ID3"||(buffer[0]===0xff&&(buffer[1]&0xe0)===0xe0),"audio/aac":()=>buffer[0]===0xff&&(buffer[1]&0xf6)===0xf0,"audio/webm":()=>buffer.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]))};
-  if(!signatures[mime] || !signatures[mime]()) return res.status(415).json({error:"Содержимое файла не соответствует его формату"});
-  const ext=({"audio/mpeg":"mp3","audio/ogg":"ogg","audio/wav":"wav","audio/mp4":"m4a","audio/aac":"aac","audio/flac":"flac","audio/webm":"weba","image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif"})[mime];
-  const filename=crypto.randomBytes(18).toString("hex")+"."+ext; fs.writeFileSync(path.join(uploadDir,filename),buffer,{flag:"wx"});
+  const mime=match[1].toLowerCase();
+  const allowed=kind==="audio"
+    ? /^audio\\/(mpeg|ogg|wav|mp4|aac|flac|webm)$/
+    : kind==="image"
+      ? /^image\\/(png|jpeg|webp|gif)$/
+      : kind==="file"
+        ? /^(application\\/(pdf|zip|vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document)|text\\/plain|video\\/(mp4|webm))$/
+        : null;
+  if(!allowed||!allowed.test(mime)) return res.status(415).json({error:"Этот формат файла не поддерживается"});
+  const buffer=Buffer.from(match[2],"base64");
+  const limit=kind==="audio"?15*1024*1024:kind==="image"?5*1024*1024:20*1024*1024;
+  if(!buffer.length||buffer.length>limit) return res.status(413).json({error:kind==="audio"?"Аудио должно быть до 15 МБ":kind==="image"?"Изображение должно быть до 5 МБ":"Файл должен быть до 20 МБ"});
+  const isZip=()=>buffer.length>=4&&buffer[0]===0x50&&buffer[1]===0x4b&&[0x03,0x05,0x07].includes(buffer[2])&&[0x04,0x06,0x08].includes(buffer[3]);
+  const signatures={
+    "image/png":()=>buffer.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),
+    "image/jpeg":()=>buffer[0]===0xff&&buffer[1]===0xd8&&buffer[2]===0xff,
+    "image/gif":()=>buffer.subarray(0,3).toString()==="GIF",
+    "image/webp":()=>buffer.subarray(0,4).toString()==="RIFF"&&buffer.subarray(8,12).toString()==="WEBP",
+    "audio/ogg":()=>buffer.subarray(0,4).toString()==="OggS",
+    "audio/wav":()=>buffer.subarray(0,4).toString()==="RIFF",
+    "audio/flac":()=>buffer.subarray(0,4).toString()==="fLaC",
+    "audio/mp4":()=>buffer.subarray(4,8).toString()==="ftyp",
+    "audio/mpeg":()=>buffer.subarray(0,3).toString()==="ID3"||(buffer[0]===0xff&&(buffer[1]&0xe0)===0xe0),
+    "audio/aac":()=>buffer[0]===0xff&&(buffer[1]&0xf6)===0xf0,
+    "audio/webm":()=>buffer.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3])),
+    "application/pdf":()=>buffer.subarray(0,5).toString()==="%PDF-",
+    "text/plain":()=>!buffer.includes(0)&&!buffer.toString("utf8").includes("\\uFFFD"),
+    "application/zip":isZip,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":isZip,
+    "video/mp4":()=>buffer.length>=12&&buffer.subarray(4,8).toString()==="ftyp",
+    "video/webm":()=>buffer.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]))
+  };
+  if(!signatures[mime]||!signatures[mime]()) return res.status(415).json({error:"Содержимое файла не соответствует его формату"});
+  const ext={
+    "audio/mpeg":"mp3","audio/ogg":"ogg","audio/wav":"wav","audio/mp4":"m4a","audio/aac":"aac","audio/flac":"flac","audio/webm":"weba",
+    "image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif",
+    "application/pdf":"pdf","text/plain":"txt","application/zip":"zip",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":"docx",
+    "video/mp4":"mp4","video/webm":"webm"
+  }[mime];
+  const filename=crypto.randomBytes(18).toString("hex")+"."+ext;
+  fs.writeFileSync(path.join(uploadDir,filename),buffer,{flag:"wx"});
   res.json({url:"/uploads/"+filename,mime,size:buffer.length});
 });
 app.get("/api/songs",auth,(req,res)=>res.json({songs:q("SELECT id,title,file_url,created_at FROM songs WHERE user_id=? ORDER BY id DESC").all(req.user.id)}));
