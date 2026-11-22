@@ -15,7 +15,7 @@
 - Per-chat server drafts and per-account message hiding with a restore manager.
 - Account blocking, with mutual direct-message enforcement and a blocked-users manager.
 - Group member lists, owner/admin/member role controls, and expiring / limited-use invite links.
-- Image, PDF, TXT, DOCX, ZIP, MP4 and WebM attachments with signature checks, compact document cards and inline video playback.
+- Image, PDF, TXT, DOCX, ZIP, MP4 and WebM attachments with signature checks, compact document cards and inline video playback (up to 20 MB per document/video; 5 MB per image).
 - Material 3 Expressive wavy progress indicators using the upstream `material@3.16.0` web component.
 
 ## Build and verify
