@@ -376,7 +376,18 @@ function initSocket(){
  state.socket.on('reaction-updated',d=>{if(state.active)api(`/api/chats/${state.active.id}/messages?limit=50`).then(x=>{$('#messages').innerHTML='';x.messages.forEach(m=>addMessage(m));state.messageHasMore=!!x.hasMore;updateLoadMoreButton()}).catch(()=>{})});
  state.socket.on('connect_error',()=>toast('Соединение с сервером потеряно'));
 }
-async function init(){try{if(!state.token){showAuth();return}await refreshMe();applyTheme(state.user.theme||state.theme);applyUI();await loadChats();initSocket()}catch(e){localStorage.removeItem('vg_token');state.token=null;state.user=null;showAuth()}}
+const materialProgressReady=(async()=>{
+ try{
+  await import('/vendor/material/elements/css/progress.js');
+  const materialElements=await import('/vendor/material/elements/index.js');
+  materialElements.defineProgress();
+  return true;
+ }catch(error){
+  console.error('Material 3 progress component failed to load:',error);
+  return false;
+ }
+})();
+async function init(){try{await materialProgressReady;if(!state.token){showAuth();return}await refreshMe();applyTheme(state.user.theme||state.theme);applyUI();await loadChats();initSocket()}catch(e){localStorage.removeItem('vg_token');state.token=null;state.user=null;showAuth()}}
 $('#newChat').onclick=()=>{closeSpaceMenu();createChat('group')};
 $('#newChatMenu').onclick=e=>{e.stopPropagation();const menu=$('#newChatMenuItems'),open=menu.classList.contains('hidden');menu.classList.toggle('hidden',!open);$('#newChatMenu').setAttribute('aria-expanded',String(open));};
 function closeSpaceMenu(){const menu=$('#newChatMenuItems');if(menu)menu.classList.add('hidden');$('#newChatMenu')?.setAttribute('aria-expanded','false')}
