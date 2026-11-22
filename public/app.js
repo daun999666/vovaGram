@@ -629,7 +629,30 @@ const materialProgressReady=(async()=>{
   return false;
  }
 })();
-async function init(){try{await materialProgressReady;if(!state.token){showAuth();return}await refreshMe();applyTheme(state.user.theme||state.theme);applyUI();await loadChats();initSocket()}catch(e){localStorage.removeItem('vg_token');state.token=null;state.user=null;showAuth()}}
+async function showInvitePreview(token){
+ try{
+  const result=await api('/api/invites/'+encodeURIComponent(token));
+  const chat=result.chat,invite=result.invite;
+  const description=chat.description||'Описание не добавлено';
+  const body='<div class="chat-invite-preview">'+avatar(chat.avatar,chat.title,'public-avatar')+'<h3>'+esc(chat.title)+'</h3><p>'+esc(description)+'</p><small>'+(chat.type==='channel'?'Публичный канал':'Групповой чат')+'</small>'+
+   (invite.valid?'':'<p class="auth-error">Эта ссылка истекла или исчерпала лимит использований.</p>')+'</div>';
+  const dialog=modal('Приглашение в пространство','Проверь информацию перед вступлением',body,'<button class="soft-btn" data-close>Отмена</button><button class="filled" id="joinInvite" '+(invite.valid?'':'disabled')+'>Присоединиться</button>');
+  $('#joinInvite').onclick=async()=>{
+   try{
+    const joined=await api('/api/invites/'+encodeURIComponent(token)+'/join',{method:'POST',body:'{}'});
+    const url=new URL(location.href);url.searchParams.delete('invite');history.replaceState({},'',url.pathname+url.search+url.hash);
+    closeModal();await loadChats();openChat(joined.chat.id);toast('Ты присоединился к пространству');
+   }catch(e){toast(e.message)}
+  };
+ }catch(e){toast(e.message)}
+}
+async function init(){try{
+ await materialProgressReady;
+ if(!state.token){showAuth();return}
+ await refreshMe();applyTheme(state.user.theme||state.theme);applyUI();await loadChats();initSocket();
+ const inviteToken=new URLSearchParams(location.search).get('invite');
+ if(inviteToken)await showInvitePreview(inviteToken);
+}catch(e){localStorage.removeItem('vg_token');state.token=null;state.user=null;showAuth()}}
 $('#newChat').onclick=()=>{closeSpaceMenu();createChat('group')};
 $('#newChatMenu').onclick=e=>{e.stopPropagation();const menu=$('#newChatMenuItems'),open=menu.classList.contains('hidden');menu.classList.toggle('hidden',!open);$('#newChatMenu').setAttribute('aria-expanded',String(open));};
 function closeSpaceMenu(){const menu=$('#newChatMenuItems');if(menu)menu.classList.add('hidden');$('#newChatMenu')?.setAttribute('aria-expanded','false')}
