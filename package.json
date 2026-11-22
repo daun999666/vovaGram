@@ -1,6 +1,6 @@
 {
   "name": "vovchikgram",
-  "version": "2.0.0-dev.3",
+  "version": "2.0.0-dev.4",
   "private": true,
   "description": "vovchikGram 2.0 — Material 3 Expressive self-hosted messenger",
   "main": "server.js",
