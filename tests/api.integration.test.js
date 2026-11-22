@@ -174,6 +174,62 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(created.status, 200, JSON.stringify(created.body));
   const chatId = created.body.chat.id;
 
+  const channelUsername = "v2chan" + suffix;
+  const publicChannel = await request(baseUrl, ownerToken, "/api/chats", {
+    method: "POST",
+    body: JSON.stringify({ title: "Public v2 channel", type: "channel", username: channelUsername })
+  });
+  assert.equal(publicChannel.status, 200, JSON.stringify(publicChannel.body));
+  const channelId = publicChannel.body.chat.id;
+  assert.equal(publicChannel.body.chat.username, channelUsername);
+  const channelLookup = await request(baseUrl, guestToken, "/api/channels/by-username/" + channelUsername);
+  assert.equal(channelLookup.status, 200);
+  assert.equal(channelLookup.body.isMember, false);
+  const channelDirectory = await request(baseUrl, guestToken, "/api/channels?q=" + channelUsername);
+  assert.ok(channelDirectory.body.channels.some(channel => channel.id === channelId));
+  const subscribed = await request(baseUrl, guestToken, "/api/channels/" + channelId + "/subscribe", { method: "POST", body: "{}" });
+  assert.equal(subscribed.status, 200);
+  assert.equal(subscribed.body.subscribed, true);
+  const subscribedAgain = await request(baseUrl, guestToken, "/api/channels/" + channelId + "/subscribe", { method: "POST", body: "{}" });
+  assert.equal(subscribedAgain.body.alreadySubscribed, true);
+  const channelPost = await request(baseUrl, ownerToken, "/api/chats/" + channelId + "/messages", {
+    method: "POST", body: JSON.stringify({ body: "Anonymous channel post", sendAsChannel: true })
+  });
+  assert.equal(channelPost.status, 200, JSON.stringify(channelPost.body));
+  assert.equal(channelPost.body.message.sender_is_channel, 1);
+  assert.equal(channelPost.body.message.username, null);
+  const memberCannotImpersonateChannel = await request(baseUrl, guestToken, "/api/chats/" + channelId + "/messages", {
+    method: "POST", body: JSON.stringify({ body: "Should be rejected", sendAsChannel: true })
+  });
+  assert.equal(memberCannotImpersonateChannel.status, 403);
+  const channelHistoryFirst = await request(baseUrl, guestToken, "/api/chats/" + channelId + "/messages");
+  assert.equal(channelHistoryFirst.status, 200);
+  assert.equal(channelHistoryFirst.body.messages[0].display_name, "Public v2 channel");
+  assert.equal(channelHistoryFirst.body.messages[0].view_count, 1);
+  const channelHistorySecond = await request(baseUrl, guestToken, "/api/chats/" + channelId + "/messages");
+  assert.equal(channelHistorySecond.body.messages[0].view_count, 1, "views are deduplicated per account");
+  const unsubscribe = await request(baseUrl, guestToken, "/api/channels/" + channelId + "/subscribe", { method: "DELETE" });
+  assert.equal(unsubscribe.status, 200);
+  const channelAfterUnsubscribe = await request(baseUrl, guestToken, "/api/chats/" + channelId + "/messages");
+  assert.equal(channelAfterUnsubscribe.status, 403);
+
+  const wavBytes = Buffer.from("RIFF0000WAVE");
+  const wavUpload = await request(baseUrl, ownerToken, "/api/upload", {
+    method: "POST", body: JSON.stringify({ kind: "audio", data: "data:audio/wav;base64," + wavBytes.toString("base64") })
+  });
+  assert.equal(wavUpload.status, 200, JSON.stringify(wavUpload.body));
+  assert.match(wavUpload.body.url, /\\.wav$/);
+  const m4aBytes = Buffer.from("0000ftypM4A ");
+  const m4aUpload = await request(baseUrl, ownerToken, "/api/upload", {
+    method: "POST", body: JSON.stringify({ kind: "audio", data: "data:audio/x-m4a;base64," + m4aBytes.toString("base64") })
+  });
+  assert.equal(m4aUpload.status, 200, JSON.stringify(m4aUpload.body));
+  assert.match(m4aUpload.body.url, /\\.m4a$/);
+  const savedWavSong = await request(baseUrl, ownerToken, "/api/songs", {
+    method: "POST", body: JSON.stringify({ title: "WAV smoke", url: wavUpload.body.url })
+  });
+  assert.equal(savedWavSong.status, 200);
+
   const initialMembers = await request(baseUrl, ownerToken, `/api/chats/${chatId}/members`);
   assert.equal(initialMembers.status, 200);
   assert.equal(initialMembers.body.members.length, 2);
