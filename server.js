@@ -372,7 +372,7 @@ app.get("/api/chats/:id/members",auth,(req,res)=>{
   const id=Number(req.params.id);
   if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id))
     return res.status(403).json({error:"Нет доступа"});
-  const members=q(`SELECT u.id,u.username,u.display_name,u.avatar,u.role AS account_role,m.role AS chat_role,m.created_at
+  const members=q(`SELECT u.id,u.username,u.display_name,u.avatar,u.role AS account_role,m.role AS chat_role
     FROM members m JOIN users u ON u.id=m.user_id
     WHERE m.chat_id=? ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,u.display_name COLLATE NOCASE`).all(id);
   res.json({members});
