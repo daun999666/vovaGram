@@ -351,13 +351,18 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const invitePreview = await request(baseUrl, null, `/api/invites/${inviteToken}`);
   assert.equal(invitePreview.status, 200);
   assert.equal(invitePreview.body.invite.valid, true);
-  const inviteJoin = await request(baseUrl, guestToken, `/api/invites/${inviteToken}/join`, {
+  const invitee = await request(baseUrl, null, "/api/register", {
+    method: "POST",
+    body: JSON.stringify({ username: "v2invitee" + suffix, password: "test-password-123", displayName: "V2 Invitee" })
+  });
+  assert.equal(invitee.status, 200, JSON.stringify(invitee.body));
+  const inviteJoin = await request(baseUrl, invitee.body.token, `/api/invites/${inviteToken}/join`, {
     method: "POST", body: "{}"
   });
   assert.equal(inviteJoin.status, 200);
   const exhaustedPreview = await request(baseUrl, null, `/api/invites/${inviteToken}`);
   assert.equal(exhaustedPreview.body.invite.valid, false);
-  const secondJoin = await request(baseUrl, guestToken, `/api/invites/${inviteToken}/join`, {
+  const secondJoin = await request(baseUrl, invitee.body.token, `/api/invites/${inviteToken}/join`, {
     method: "POST", body: "{}"
   });
   assert.equal(secondJoin.status, 410);
