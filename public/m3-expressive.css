@@ -741,3 +741,9 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .m3-scheduled-row button{flex:none}
 #scheduleMessage .material-symbols-rounded{font-size:19px;margin:0}
 @media(max-width:560px){.m3-scheduled-row{align-items:flex-start;flex-direction:column}.m3-scheduled-row button{align-self:flex-end}}
+
+
+/* Pinned chats, distinct from starred favourites */
+.chat-pin-mark{display:inline-flex;vertical-align:-2px;margin-left:4px;color:var(--primary)}
+.chat-pin-mark .material-symbols-rounded{font-size:13px;margin:0}
+#toggleChatPin .material-symbols-rounded{font-size:17px;margin:0}
