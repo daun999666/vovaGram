@@ -608,3 +608,44 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
  .media-waveform,.media-wave-range{height:26px!important}
  .media-wave-range::-webkit-slider-runnable-track,.media-wave-range::-moz-range-track{height:26px!important}
 }
+
+
+/* Material 3 web components — use the package's native system colour roles. */
+:root{
+ --mtrl-sys-color-primary:var(--primary);
+ --mtrl-sys-color-secondary-container:var(--surface3);
+ --mtrl-sys-color-on-surface-variant:var(--muted);
+}
+
+/* The seek range is only the input layer; the visible wavy indicator is the
+   official floor/material <m-progress shape="wavy"> canvas. */
+.media-waveform.m3-native-progress{
+ display:block!important;position:relative!important;flex:none!important;
+ width:100%!important;height:10px!important;min-height:10px!important;
+ margin:0!important;padding:0!important;overflow:visible!important;
+ border:0!important;border-radius:0!important;
+ background:transparent!important;box-shadow:none!important;
+}
+.media-waveform.m3-native-progress canvas{
+ display:block!important;width:100%!important;height:10px!important;max-width:none!important;
+}
+.media-timeline{position:relative}
+.media-wave-range{
+ top:-9px!important;left:0!important;width:100%!important;height:28px!important;
+ opacity:.01!important;cursor:pointer;z-index:3;
+}
+.media-wave-range::-webkit-slider-runnable-track{height:28px!important;background:transparent!important}
+.media-wave-range::-moz-range-track{height:28px!important;background:transparent!important}
+.media-wave-range::-webkit-slider-thumb{width:20px;height:20px;margin-top:4px;opacity:1!important;background:transparent!important;border:0!important;box-shadow:none!important}
+.media-wave-range::-moz-range-thumb{width:20px;height:20px;opacity:1!important;background:transparent!important;border:0!important;box-shadow:none!important}
+
+/* Upload progress uses the same original renderer, not a second hand-drawn wave. */
+.m3-transfer-native-progress{
+ display:block!important;width:100%!important;height:10px!important;min-height:10px!important;
+ margin:0!important;padding:0!important;overflow:visible!important;
+ border:0!important;background:transparent!important;border-radius:0!important;
+}
+.m3-transfer-native-progress canvas{display:block!important;width:100%!important;height:10px!important;max-width:none!important}
+@media(prefers-reduced-motion:reduce){
+ .m3-transfer-native-progress,.media-waveform.m3-native-progress{scroll-behavior:auto}
+}
