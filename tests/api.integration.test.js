@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const net = require("node:net");
 const { spawn } = require("node:child_process");
+const Database = require("better-sqlite3");
 
 const root = path.resolve(__dirname, "..");
 const serverPath = path.join(root, "server.js");
@@ -47,6 +48,11 @@ async function request(baseUrl, token, route, options = {}) {
 
 test("API integration: paging, unread/read markers, saved messages and pins", async t => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "vg-v2-api-"));
+  // Simulate an existing installation created before members.joined_at existed.
+  const legacyDb = new Database(path.join(dataDir, "vovchikgram.sqlite"));
+  legacyDb.exec("CREATE TABLE members (chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,role TEXT DEFAULT 'member',PRIMARY KEY(chat_id,user_id))");
+  legacyDb.prepare("INSERT INTO members(chat_id,user_id,role) VALUES(999,999,'member')").run();
+  legacyDb.close();
   const port = await reservePort();
   const baseUrl = "http://127.0.0.1:" + port;
   const child = spawn(process.execPath, [serverPath], {
@@ -71,6 +77,11 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   });
 
   await waitForServer(baseUrl, child);
+  const migrationDb = new Database(path.join(dataDir, "vovchikgram.sqlite"), { readonly: true });
+  const migratedLegacyMember = migrationDb.prepare("SELECT joined_at FROM members WHERE chat_id=999 AND user_id=999").get();
+  assert.ok(migratedLegacyMember?.joined_at, "legacy member rows receive a joined_at timestamp");
+  assert.ok(Number.isFinite(Date.parse(migratedLegacyMember.joined_at.replace(" ", "T") + "Z")));
+  migrationDb.close();
   const suffix = String(process.pid).slice(-5);
   const a = await request(baseUrl, null, "/api/register", {
     method: "POST",
@@ -173,6 +184,10 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   });
   assert.equal(created.status, 200, JSON.stringify(created.body));
   const chatId = created.body.chat.id;
+  const newMemberDb = new Database(path.join(dataDir, "vovchikgram.sqlite"), { readonly: true });
+  const newOwnerMembership = newMemberDb.prepare("SELECT joined_at FROM members WHERE chat_id=? AND user_id=?").get(chatId, a.body.user.id);
+  assert.ok(newOwnerMembership?.joined_at, "new memberships receive joined_at automatically");
+  newMemberDb.close();
 
   const channelUsername = "v2chan" + suffix;
   const publicChannel = await request(baseUrl, ownerToken, "/api/chats", {
