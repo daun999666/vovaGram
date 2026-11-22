@@ -444,10 +444,16 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
     method: "POST", body: JSON.stringify({ currentPassword: "wrong-password", newPassword: "new-test-password-456" })
   });
   assert.equal(wrongCurrentPassword.status, 403);
+  const prePasswordChangeLogin = await request(baseUrl, null, "/api/login", {
+    method: "POST", body: JSON.stringify({ username: "v2owner" + suffix, password: "test-password-123" })
+  });
+  assert.equal(prePasswordChangeLogin.status, 200);
   const passwordChanged = await request(baseUrl, ownerToken, "/api/account/password", {
     method: "POST", body: JSON.stringify({ currentPassword: "test-password-123", newPassword: "new-test-password-456" })
   });
   assert.equal(passwordChanged.status, 200);
+  const revokedAfterPasswordChange = await request(baseUrl, prePasswordChangeLogin.body.token, "/api/me");
+  assert.equal(revokedAfterPasswordChange.status, 401);
   const oldPasswordLogin = await request(baseUrl, null, "/api/login", {
     method: "POST", body: JSON.stringify({ username: "v2owner" + suffix, password: "test-password-123" })
   });
