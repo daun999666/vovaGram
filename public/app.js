@@ -108,7 +108,7 @@ async function loadOlderMessages(){
  const oldHeight=list.scrollHeight,oldTop=list.scrollTop;
  try{
   const d=await api(`/api/chats/${state.active.id}/messages?before=${before}&limit=50`);
-  d.messages.forEach(m=>addMessage(m,{prepend:true}));
+  d.messages.slice().reverse().forEach(m=>addMessage(m,{prepend:true}));
   state.messageHasMore=!!d.hasMore;
   list.scrollTop=list.scrollHeight-oldHeight+oldTop;
  }catch(e){toast(e.message)}
@@ -178,7 +178,7 @@ function addMessage(m,{prepend=false}={}){
   '<button data-copy title="Копировать" aria-label="Копировать">'+m3Icon('content_copy')+'</button>'+
   '<button data-reply title="Ответить" aria-label="Ответить">'+m3Icon('reply')+'</button>'+
   '<button data-save title="В Избранное" aria-label="В Избранное">'+m3Icon('bookmark_add')+'</button>'+
-  '<button data-pin data-pinned="'+(m.is_pinned?'true':'false')+'" title="'+(m.is_pinned?'Открепить':'Закрепить')+'" aria-label="Закрепить сообщение">'+m3Icon('push_pin')+'</button>'+
+  ((state.active?.type==='direct'||['owner','admin'].includes(state.active?.my_role)||['owner','dev'].includes(state.user?.role))?'<button data-pin data-pinned="'+(m.is_pinned?'true':'false')+'" title="'+(m.is_pinned?'Открепить':'Закрепить')+'" aria-label="Закрепить сообщение">'+m3Icon('push_pin')+'</button>':'')+
   '<button data-react-open title="Реакция" aria-label="Реакция">'+m3Icon('add_reaction')+'</button>'+
   (mine?'<button data-edit title="Изменить" aria-label="Изменить">'+m3Icon('edit')+'</button><button data-delete title="Удалить" aria-label="Удалить">'+m3Icon('delete')+'</button>':'')+
   '</span></div><div class="reactions">'+react+'</div></div>';
@@ -384,9 +384,10 @@ $('#messageFilePicker').onchange=e=>{addMessageFiles([...e.target.files]);e.targ
 let typingStopTimer=null;
 $('#messageInput').addEventListener('input',()=>{
  if(!state.active||!state.socket?.connected)return;
- state.socket.emit('typing',{chatId:state.active.id,typing:true});
+ const typingChatId=state.active.id;
+ state.socket.emit('typing',{chatId:typingChatId,typing:true});
  clearTimeout(typingStopTimer);
- typingStopTimer=setTimeout(()=>state.socket?.emit('typing',{chatId:state.active?.id,typing:false}),1300);
+ typingStopTimer=setTimeout(()=>state.socket?.emit('typing',{chatId:typingChatId,typing:false}),1300);
 });$('#sendForm').onsubmit=async e=>{e.preventDefault();await sendCurrentMessage()};document.addEventListener('paste',e=>{if(!state.active)return;const items=[...(e.clipboardData?.items||[])];const images=items.filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(images.length){e.preventDefault();addMessageFiles(images)}});
 $('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='saved')openSavedMessages();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b))});const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}});
 
