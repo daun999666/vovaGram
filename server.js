@@ -92,6 +92,12 @@ CREATE TABLE IF NOT EXISTS chat_drafts (user_id INTEGER NOT NULL,chat_id INTEGER
 CREATE TABLE IF NOT EXISTS hidden_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,hidden_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocked_users (blocker_id INTEGER NOT NULL,blocked_id INTEGER NOT NULL,blocked_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(blocker_id,blocked_id));
 CREATE TABLE IF NOT EXISTS chat_invites (token TEXT PRIMARY KEY,chat_id INTEGER NOT NULL,created_by INTEGER NOT NULL,expires_at TEXT,max_uses INTEGER DEFAULT 0,uses INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS chat_join_requests (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,
+ status TEXT NOT NULL DEFAULT 'pending',requested_at TEXT DEFAULT CURRENT_TIMESTAMP,
+ reviewed_at TEXT,reviewed_by INTEGER,UNIQUE(chat_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_join_requests_chat_status ON chat_join_requests(chat_id,status,requested_at);
 CREATE TABLE IF NOT EXISTS scheduled_messages (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,body TEXT NOT NULL DEFAULT '',attachments TEXT DEFAULT '[]',scheduled_at INTEGER NOT NULL,status TEXT DEFAULT 'pending',sent_message_id INTEGER,error TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TRIGGER IF NOT EXISTS cleanup_deleted_message_references
 AFTER DELETE ON messages
@@ -584,6 +590,58 @@ app.post("/api/invites/:token/join",auth,(req,res)=>{
   try{join()}catch{return res.status(500).json({error:"Не удалось вступить в пространство"})}
   io.to("chat:"+chat.id).emit("chat-member-joined",{chatId:chat.id,userId:req.user.id});
   res.json({ok:true,chat});
+});
+app.post("/api/chats/:id/join-requests",auth,(req,res)=>{
+  const chatId=Number(req.params.id);
+  if(!Number.isSafeInteger(chatId)||chatId<1) return res.status(400).json({error:"Некорректный ID чата"});
+  const chat=q("SELECT id,type FROM chats WHERE id=?").get(chatId);
+  if(!chat||chat.type==="direct") return res.status(404).json({error:"Пространство не найдено"});
+  if(q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id))
+    return res.status(409).json({error:"Ты уже состоишь в этом пространстве"});
+  const existing=q("SELECT id,status FROM chat_join_requests WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(existing?.status==="pending") return res.json({ok:true,requestId:existing.id,pending:true});
+  if(existing){
+    q("UPDATE chat_join_requests SET status='pending',requested_at=CURRENT_TIMESTAMP,reviewed_at=NULL,reviewed_by=NULL WHERE id=?").run(existing.id);
+    return res.json({ok:true,requestId:existing.id,pending:true});
+  }
+  const result=q("INSERT INTO chat_join_requests(chat_id,user_id) VALUES(?,?)").run(chatId,req.user.id);
+  io.to("chat:"+chatId).emit("chat-join-request",{chatId,requestId:result.lastInsertRowid});
+  res.json({ok:true,requestId:result.lastInsertRowid,pending:true});
+});
+app.get("/api/chats/:id/join-requests",auth,(req,res)=>{
+  const chatId=Number(req.params.id);
+  const actor=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!actor) return res.status(403).json({error:"Нет доступа"});
+  if(!["owner","admin"].includes(actor.role)&&!["owner","dev"].includes(req.user.role))
+    return res.status(403).json({error:"Недостаточно прав"});
+  const requests=q(`SELECT r.id,r.requested_at,u.id AS user_id,u.username,u.display_name,u.avatar
+    FROM chat_join_requests r JOIN users u ON u.id=r.user_id
+    WHERE r.chat_id=? AND r.status='pending' ORDER BY r.requested_at,r.id`).all(chatId);
+  res.json({requests});
+});
+app.patch("/api/chats/:id/join-requests/:requestId",auth,(req,res)=>{
+  const chatId=Number(req.params.id),requestId=Number(req.params.requestId);
+  const decision=String(req.body.decision||"");
+  if(!Number.isSafeInteger(chatId)||chatId<1||!Number.isSafeInteger(requestId)||requestId<1)
+    return res.status(400).json({error:"Некорректный ID"});
+  if(!["approve","reject"].includes(decision)) return res.status(400).json({error:"Решение должно быть approve или reject"});
+  const actor=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!actor) return res.status(403).json({error:"Нет доступа"});
+  if(!["owner","admin"].includes(actor.role)&&!["owner","dev"].includes(req.user.role))
+    return res.status(403).json({error:"Недостаточно прав"});
+  const joinRequest=q("SELECT * FROM chat_join_requests WHERE id=? AND chat_id=?").get(requestId,chatId);
+  if(!joinRequest||joinRequest.status!=="pending") return res.status(404).json({error:"Заявка уже обработана или не найдена"});
+  const review=db.transaction(()=>{
+    const changed=q("UPDATE chat_join_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP,reviewed_by=? WHERE id=? AND status='pending'")
+      .run(decision==="approve"?"approved":"rejected",req.user.id,requestId);
+    if(!changed.changes) return false;
+    if(decision==="approve") q("INSERT OR IGNORE INTO members(chat_id,user_id,role) VALUES(?,?,'member')").run(chatId,joinRequest.user_id);
+    return true;
+  });
+  if(!review()) return res.status(409).json({error:"Заявка уже обработана"});
+  if(decision==="approve") io.to("chat:"+chatId).emit("chat-member-joined",{chatId,userId:joinRequest.user_id});
+  io.to("chat:"+chatId).emit("chat-join-request-reviewed",{chatId,requestId,decision});
+  res.json({ok:true,decision,userId:joinRequest.user_id});
 });
 app.get("/api/chats/:id/draft",auth,(req,res)=>{
   const id=Number(req.params.id);
