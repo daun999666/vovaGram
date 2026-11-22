@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS chat_reads (chat_id INTEGER NOT NULL,user_id INTEGER 
 CREATE TABLE IF NOT EXISTS chat_pins (chat_id INTEGER NOT NULL,message_id INTEGER NOT NULL,pinned_by INTEGER NOT NULL,pinned_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,message_id));
 CREATE TABLE IF NOT EXISTS saved_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,saved_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS chat_preferences (user_id INTEGER NOT NULL,chat_id INTEGER NOT NULL,archived INTEGER DEFAULT 0,starred INTEGER DEFAULT 0,muted INTEGER DEFAULT 0,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chat_id));
+CREATE TABLE IF NOT EXISTS message_edits (id INTEGER PRIMARY KEY AUTOINCREMENT,message_id INTEGER NOT NULL,edited_by INTEGER NOT NULL,body TEXT NOT NULL,edited_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TRIGGER IF NOT EXISTS cleanup_deleted_message_references
 AFTER DELETE ON messages
 BEGIN
@@ -87,6 +88,11 @@ ensureColumn("messages","reply_to","INTEGER");
 ensureColumn("messages","edited_at","TEXT");
 ensureColumn("messages","reactions","TEXT DEFAULT '{}'");
 ensureColumn("messages","attachments","TEXT DEFAULT '[]'");
+ensureColumn("messages","forwarded_from_message_id","INTEGER");
+ensureColumn("messages","forwarded_from_user_id","INTEGER");
+ensureColumn("messages","forwarded_from_name","TEXT");
+ensureColumn("messages","forwarded_from_chat_id","INTEGER");
+ensureColumn("messages","forwarded_from_chat_title","TEXT");
 
 const q = (sql) => db.prepare(sql);
 const getUser = q("SELECT id,number,username,display_name,bio,avatar,profile_bg,theme,role,banned,created_at FROM users WHERE id=?");
@@ -302,6 +308,8 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
   const before=boundedInteger(req.query.before,0,0,Number.MAX_SAFE_INTEGER);
   const limit=boundedInteger(req.query.limit,50,1,100);
   const select=`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+    m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
+    (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
     u.username,u.display_name,u.avatar,u.role,
     (SELECT COUNT(*) FROM chat_reads cr WHERE cr.chat_id=m.chat_id AND cr.user_id<>m.user_id AND cr.last_read_message_id>=m.id) AS read_by_count,
     EXISTS(SELECT 1 FROM chat_pins cp WHERE cp.chat_id=m.chat_id AND cp.message_id=m.id) AS is_pinned
@@ -386,7 +394,10 @@ app.post("/api/chats/:id/messages",auth,(req,res)=>{
   const replyTo=Number(req.body.replyTo)||null;
   if(replyTo && !q("SELECT id FROM messages WHERE id=? AND chat_id=?").get(replyTo,id)) return res.status(400).json({error:"Сообщение для ответа не найдено"});
   const info=q("INSERT INTO messages(chat_id,user_id,body,reply_to,attachments) VALUES(?,?,?,?,?)").run(id,req.user.id,body,replyTo,JSON.stringify(validAttachments));
-  const message=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,u.username,u.display_name,u.avatar,u.role
+  const message=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+    m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
+    (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
+    u.username,u.display_name,u.avatar,u.role
     FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id=?`).get(info.lastInsertRowid);
   io.to("chat:"+id).emit("message",message);
   res.json({message});
@@ -462,9 +473,49 @@ app.patch("/api/messages/:id",auth,(req,res)=>{
   if(!m) return res.status(404).json({error:"Сообщение не найдено"});
   if(m.user_id!==req.user.id && !["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Можно изменять только свои сообщения"});
   const body=sanitizeMessageBody(req.body.body,4000); if(!body) return res.status(400).json({error:"Пустое сообщение"});
+  if(body!==m.body) q("INSERT INTO message_edits(message_id,edited_by,body) VALUES(?,?,?)").run(id,req.user.id,m.body);
   q("UPDATE messages SET body=?,edited_at=CURRENT_TIMESTAMP WHERE id=?").run(body,id);
-  const updated=q("SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,u.username,u.display_name,u.avatar,u.role FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id=?").get(id);
+  const updated=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+    m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
+    (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
+    u.username,u.display_name,u.avatar,u.role FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id=?`).get(id);
   io.to("chat:"+m.chat_id).emit("message-updated",updated); res.json({message:updated});
+});
+app.get("/api/messages/:id/edits",auth,(req,res)=>{
+  const id=Number(req.params.id),message=q("SELECT id,chat_id FROM messages WHERE id=?").get(id);
+  if(!message) return res.status(404).json({error:"Сообщение не найдено"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(message.chat_id,req.user.id))
+    return res.status(403).json({error:"Нет доступа"});
+  const edits=q("SELECT id,body,edited_at FROM message_edits WHERE message_id=? ORDER BY id DESC LIMIT 50").all(id);
+  res.json({edits});
+});
+app.post("/api/messages/:id/forward",auth,(req,res)=>{
+  const id=Number(req.params.id),targetChatId=Number(req.body.chatId);
+  const source=q(`SELECT m.*,u.display_name,u.username,c.title AS chat_title
+    FROM messages m JOIN users u ON u.id=m.user_id JOIN chats c ON c.id=m.chat_id WHERE m.id=?`).get(id);
+  if(!source) return res.status(404).json({error:"Исходное сообщение не найдено"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(source.chat_id,req.user.id))
+    return res.status(403).json({error:"Нет доступа к исходному сообщению"});
+  const targetMember=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(targetChatId,req.user.id);
+  if(!targetMember) return res.status(403).json({error:"Нет доступа к чату назначения"});
+  const target=q("SELECT type FROM chats WHERE id=?").get(targetChatId);
+  if(!target) return res.status(404).json({error:"Чат назначения не найден"});
+  if(target.type==="channel"&&!["owner","admin"].includes(targetMember.role)&&!["owner","dev"].includes(req.user.role))
+    return res.status(403).json({error:"Публиковать в канале могут только администраторы"});
+  let attachments=[];
+  try{attachments=JSON.parse(source.attachments||"[]")}catch{}
+  const validAttachments=Array.isArray(attachments)?attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"image")):[];
+  const body=sanitizeMessageBody(source.body,4000);
+  if(!body&&!validAttachments.length) return res.status(400).json({error:"Нечего пересылать"});
+  const info=q(`INSERT INTO messages(chat_id,user_id,body,attachments,forwarded_from_message_id,forwarded_from_user_id,forwarded_from_name,forwarded_from_chat_id,forwarded_from_chat_title)
+    VALUES(?,?,?,?,?,?,?,?,?)`).run(targetChatId,req.user.id,body,JSON.stringify(validAttachments),source.id,source.user_id,source.display_name||source.username,source.chat_id,source.chat_title);
+  const message=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+    m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
+    (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
+    u.username,u.display_name,u.avatar,u.role
+    FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id=?`).get(info.lastInsertRowid);
+  io.to("chat:"+targetChatId).emit("message",message);
+  res.json({message});
 });
 app.delete("/api/messages/:id",auth,(req,res)=>{
   const id=Number(req.params.id), m=q("SELECT * FROM messages WHERE id=?").get(id);
