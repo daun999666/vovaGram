@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS songs (id INTEGER PRIMARY KEY AUTOINCREMENT,user_id I
 CREATE TABLE IF NOT EXISTS chat_reads (chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_read_message_id INTEGER NOT NULL DEFAULT 0,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,user_id));
 CREATE TABLE IF NOT EXISTS chat_pins (chat_id INTEGER NOT NULL,message_id INTEGER NOT NULL,pinned_by INTEGER NOT NULL,pinned_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,message_id));
 CREATE TABLE IF NOT EXISTS saved_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,saved_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
+CREATE TABLE IF NOT EXISTS chat_preferences (user_id INTEGER NOT NULL,chat_id INTEGER NOT NULL,archived INTEGER DEFAULT 0,starred INTEGER DEFAULT 0,muted INTEGER DEFAULT 0,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chat_id));
 CREATE TRIGGER IF NOT EXISTS cleanup_deleted_message_references
 AFTER DELETE ON messages
 BEGIN
@@ -246,15 +247,38 @@ app.get("/api/chats",auth,(req,res)=>{
     (SELECT COUNT(*) FROM messages um LEFT JOIN chat_reads cr ON cr.chat_id=um.chat_id AND cr.user_id=?
       WHERE um.chat_id=c.id AND um.id>COALESCE(cr.last_read_message_id,0) AND um.user_id<>?) AS unread_count,
     (SELECT message_id FROM chat_pins WHERE chat_id=c.id ORDER BY pinned_at DESC,message_id DESC LIMIT 1) AS pinned_message_id,
-    (SELECT m2.user_id FROM members m2 WHERE m2.chat_id=c.id AND m2.user_id<>? LIMIT 1) AS peer_user_id
-    FROM chats c JOIN members m ON m.chat_id=c.id WHERE m.user_id=?
-    ORDER BY COALESCE(last_time,c.created_at) DESC`).all(req.user.id,req.user.id,req.user.id,req.user.id);
+    (SELECT m2.user_id FROM members m2 WHERE m2.chat_id=c.id AND m2.user_id<>? LIMIT 1) AS peer_user_id,
+    COALESCE(cp.archived,0) AS is_archived,
+    COALESCE(cp.starred,0) AS is_starred,
+    COALESCE(cp.muted,0) AS is_muted
+    FROM chats c JOIN members m ON m.chat_id=c.id
+    LEFT JOIN chat_preferences cp ON cp.chat_id=c.id AND cp.user_id=m.user_id
+    WHERE m.user_id=?
+    ORDER BY COALESCE(cp.starred,0) DESC,COALESCE(last_time,c.created_at) DESC`).all(req.user.id,req.user.id,req.user.id,req.user.id);
   const onlineIds=new Set([...onlineUsers.values()]);
   for(const chat of chats){
     if(chat.type==="direct") chat.peer_online=onlineIds.has(chat.peer_user_id);
     else chat.peer_online=false;
   }
   res.json({chats});
+});
+app.patch("/api/chats/:id/preferences",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:"Некорректный ID чата"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id))
+    return res.status(403).json({error:"Нет доступа"});
+  const current=q("SELECT archived,starred,muted FROM chat_preferences WHERE user_id=? AND chat_id=?").get(req.user.id,id)||{archived:0,starred:0,muted:0};
+  const next={
+    archived:req.body.archived===undefined?current.archived:(req.body.archived?1:0),
+    starred:req.body.starred===undefined?current.starred:(req.body.starred?1:0),
+    muted:req.body.muted===undefined?current.muted:(req.body.muted?1:0)
+  };
+  q(`INSERT INTO chat_preferences(user_id,chat_id,archived,starred,muted)
+    VALUES(?,?,?,?,?)
+    ON CONFLICT(user_id,chat_id) DO UPDATE SET
+      archived=excluded.archived,starred=excluded.starred,muted=excluded.muted,updated_at=CURRENT_TIMESTAMP`)
+    .run(req.user.id,id,next.archived,next.starred,next.muted);
+  res.json({ok:true,preferences:next});
 });
 app.post("/api/chats",auth,(req,res)=>{
   const title=String(req.body.title||"").trim().slice(0,60);
@@ -368,6 +392,25 @@ app.post("/api/chats/:id/messages",auth,(req,res)=>{
   res.json({message});
 });
 
+app.get("/api/search/messages",auth,(req,res)=>{
+  const term=String(req.query.q||"").trim().slice(0,100);
+  if(term.length<2) return res.json({messages:[]});
+  const chatId=Number(req.query.chatId)||0;
+  const before=boundedInteger(req.query.before,0,0,Number.MAX_SAFE_INTEGER);
+  const limit=boundedInteger(req.query.limit,20,1,50);
+  const escaped=term.replace(/[\\%_]/g,"\\app.get("/api/search",auth,(req,res)=>{");
+  const messages=q(`SELECT m.id,m.chat_id,m.body,m.created_at,m.reply_to,
+      u.username,u.display_name,u.avatar,c.title AS chat_title,c.type AS chat_type
+    FROM messages m
+    JOIN members mine ON mine.chat_id=m.chat_id AND mine.user_id=?
+    JOIN users u ON u.id=m.user_id
+    JOIN chats c ON c.id=m.chat_id
+    WHERE m.body LIKE ? ESCAPE '\\'
+      AND (?=0 OR m.chat_id=?)
+      AND (?=0 OR m.id<?)
+    ORDER BY m.id DESC LIMIT ?`).all(req.user.id,"%"+escaped+"%",chatId,chatId,before,before,limit);
+  res.json({messages});
+});
 app.get("/api/search",auth,(req,res)=>{
   const term=String(req.query.q||"").trim().replace(/^@/,"").slice(0,40);
   if(term.length<2) return res.json({users:[],chats:[]});
