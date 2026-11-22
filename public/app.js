@@ -651,6 +651,10 @@ function settings(){
  <div class="settings-section"><h3>Юзернеймы · ${state.usernames?.length||0}/5</h3><div id="namesList">${(state.usernames||[]).map(n=>`<div class="name-row">@${esc(n)}<button class="danger" data-remove="${esc(n)}">Удалить</button></div>`).join('')}</div><div class="inline-input"><input id="newUsername" minlength="3" maxlength="24" placeholder="dev или my_username"><button id="addUsername" class="soft-btn">＋ Добавить</button></div></div>
  <div class="settings-section"><h3>Обои чатов</h3><div class="wallpaper-options wallpaper-options-wide">${wallpaperOptions.map(([v,t])=>`<button data-wall="${v}" class="wall-sample ${v} ${(state.wallpaper===v||(state.wallpaper==='pattern'&&v==='shapes'))?'selected':''}">${t}</button>`).join('')}</div><button class="soft-btn" id="uploadWallpaper">Загрузить свои обои</button></div>
  <div class="settings-section"><h3>Музыка</h3><p class="muted">Личная медиатека с таймкодами, перемоткой и скоростью воспроизведения.</p><button class="soft-btn" id="openMediaFromSettings">Открыть медиаплеер и редактор</button><div id="songList" class="song-list"></div></div>
+ <div class="settings-section"><h3>Безопасность аккаунта</h3>
+ <form id="passwordChangeForm"><label class="field"><span>Текущий пароль</span><input id="currentPassword" type="password" autocomplete="current-password" required></label><label class="field"><span>Новый пароль</span><input id="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label><label class="field"><span>Повтори новый пароль</span><input id="confirmPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label><button class="soft-btn" type="submit">Изменить пароль</button></form>
+ <p class="muted">После смены пароля остальные устройства будут отключены.</p></div>
+ <div class="settings-section"><h3>История безопасности</h3><div id="accountActivity"><span class="muted">Загружаю события…</span></div></div>
  <div class="settings-section"><h3>Активные сеансы</h3><p class="muted">Управляй устройствами, где выполнен вход в аккаунт.</p><div id="activeSessions"><span class="muted">Загружаю сеансы…</span></div><button class="soft-btn" id="revokeOtherSessions">Завершить все остальные сеансы</button></div>
  <div class="settings-section"><h3>Приложение</h3><p class="muted">vovchikGram · build 1.7.1<br>Material 3 Expressive · Roboto Flex · Dynamic wallpapers</p></div>
  ${state.needsOwnerSetup&&state.user.username==='owner'?'<div class="settings-section owner-setup-section"><h3>Активация панели владельца</h3><p class="muted">Аккаунт @owner пока не назначен владельцем сервера. Укажи свой OWNER_PASSWORD в файле .env, перезапусти сервер и введи это значение здесь. После активации номер станет +888000888.</p><label class="field"><span>Ключ владельца из .env</span><input id="ownerBootstrapPassword" type="password" autocomplete="current-password" placeholder="Пароль из OWNER_PASSWORD"></label><button id="claimOwner" class="filled">Активировать права владельца</button></div>':''}${['owner','dev'].includes(state.user.role)?'<div class="settings-section"><h3>Администрирование</h3><p class="muted">Блокировка и удаление пользовательских аккаунтов.</p><button id="adminOpen" class="soft-btn">Открыть панель управления</button></div>':''}
@@ -665,6 +669,19 @@ function settings(){
  $('#density').onchange=e=>{state.ui.density=e.target.value;applyUI();saveUI()};
  $('#darkMode').onchange=e=>{state.ui.dark=e.target.checked;applyUI();saveUI();$('#drawerThemeState').textContent=state.ui.dark?'Вкл.':'Выкл.'};
  $('#sendOnEnter').onchange=e=>{state.ui.sendOnEnter=e.target.checked;saveUI()};
+ $('#passwordChangeForm').onsubmit=async e=>{
+  e.preventDefault();
+  const currentPassword=$('#currentPassword').value,newPassword=$('#newPassword').value,confirmPassword=$('#confirmPassword').value;
+  if(newPassword!==confirmPassword){toast('Новые пароли не совпадают');return}
+  try{const result=await api('/api/account/password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});$('#passwordChangeForm').reset();toast('Пароль изменён · остальные сеансы завершены');loadAccountSessions();loadAccountActivity()}
+  catch(error){toast(error.message)}
+ };
+ async function loadAccountActivity(){
+  const box=$('#accountActivity');if(!box)return;
+  const labels={account_registered:'Аккаунт создан',login_succeeded:'Успешный вход',login_failed:'Неудачная попытка входа',password_changed:'Пароль изменён',session_revoked:'Сеанс завершён',other_sessions_revoked:'Завершены другие сеансы',logout:'Выход из аккаунта'};
+  try{const data=await api('/api/account/activity');box.innerHTML=data.events.map(event=>'<div class="session-row"><div><b>'+esc(labels[event.event]||event.event)+'</b><small>'+esc(new Date(String(event.created_at).replace(' ','T')+'Z').toLocaleString())+'</small></div></div>').join('')||'<p class="muted">Событий пока нет</p>'}
+  catch(error){box.innerHTML='<p class="muted">'+esc(error.message)+'</p>'}
+ }
  async function loadAccountSessions(){
   const box=$('#activeSessions');if(!box)return;
   try{
@@ -674,7 +691,7 @@ function settings(){
   }catch(e){box.innerHTML='<p class="muted">'+esc(e.message)+'</p>'}
  }
  $('#revokeOtherSessions').onclick=async()=>{if(!confirm('Завершить все остальные сеансы?'))return;try{const d=await api('/api/sessions/revoke-others',{method:'POST'});toast('Завершено сеансов: '+d.revoked);loadAccountSessions()}catch(e){toast(e.message)}};
- loadAccountSessions();
+ loadAccountSessions();loadAccountActivity();
  $('#saveProfile').onclick=async()=>{try{let avatarUrl=state.user.avatar||'';const f=$('#avatarFile').files[0];if(f)avatarUrl=(await uploadFile(f,'image')).url;const d=await api('/api/profile',{method:'PATCH',body:JSON.stringify({displayName:$('#pName').value,bio:$('#pBio').value,profileBg:$('#pBg').value,avatar:avatarUrl,theme:state.theme})});state.user=d.user;drawProfile();toast('Профиль сохранён')}catch(e){toast(e.message)}};
  $('#addUsername').onclick=async()=>{try{await api('/api/usernames',{method:'POST',body:JSON.stringify({username:$('#newUsername').value})});toast('Юзернейм добавлен');closeModal();await refreshMe();settings()}catch(e){toast(e.message)}};
  m.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{try{await api('/api/usernames/'+encodeURIComponent(b.dataset.remove),{method:'DELETE'});closeModal();await refreshMe();settings()}catch(e){toast(e.message)}});
