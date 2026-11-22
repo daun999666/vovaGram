@@ -423,7 +423,7 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(latest.body.hasMore, true);
   const older = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages?before=${latest.body.messages[0].id}&limit=2`);
   assert.equal(older.status, 200);
-  assert.deepEqual(older.body.messages.map(x => x.body), ["first message"]);
+  assert.deepEqual(older.body.messages.map(x => x.body), ["admin bypasses slow mode", "first message"]);
   assert.equal(older.body.hasMore, false);
 
   const pdfBuffer = Buffer.from("%PDF-1.4\\n% vovchikGram test\\n%%EOF\\n");
