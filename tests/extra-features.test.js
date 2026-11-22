@@ -1,0 +1,13 @@
+"use strict";
+const test=require("node:test");
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
+const {spawnSync}=require("node:child_process");
+const source=fs.readFileSync(path.join(__dirname,"../public/extra-features.js"),"utf8");
+test("extra feature bundle parses",()=>{const result=spawnSync(process.execPath,["--check",path.join(__dirname,"../public/extra-features.js")],{encoding:"utf8"});assert.equal(result.status,0,result.stderr||result.stdout)});
+test("extra feature bundle exposes preferences and import/export",()=>{for(const marker of ["vg_extra_preferences_v1","data-extra-export","data-extra-import","data-extra-reset","data-pref="])assert.ok(source.includes(marker),marker)});
+test("extra feature bundle includes sorting, chat labels and image gallery",()=>{for(const marker of ["unread","favorites","vg_chat_color_labels_v1","vgImageLightbox","data-download","ArrowLeft","ArrowRight"])assert.ok(source.includes(marker),marker)});
+test("extra feature bundle includes accessible navigation and keyboard shortcuts",()=>{for(const marker of ["vgSkip","aria-live","Ctrl+Shift+M","ArrowUp","ArrowDown","beforeinstallprompt"])assert.ok(source.includes(marker),marker)});
+test("system notifications never include message body text",()=>{assert.match(source,/body:'Открой приложение, чтобы прочитать'/);assert.doesNotMatch(source,/body:\\s*n\\.body|body:\\s*message\\.body/)});
+test("settings export contains only local preferences",()=>{assert.match(source,/JSON\\.stringify\\(p,null,2\\)/);assert.doesNotMatch(source,/JSON\\.stringify\\(state|JSON\\.stringify\\(window\\.state/)});
