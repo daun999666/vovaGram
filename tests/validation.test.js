@@ -34,4 +34,8 @@ test("upload URL validation rejects external URLs and traversal paths", () => {
   assert.equal(isValidUploadPath("https://example.com/track.mp3", "audio"), false);
   assert.equal(isValidUploadPath("/uploads/../../secret.png", "image"), false);
   assert.equal(isValidUploadPath("/uploads/abcdef.exe", "image"), false);
+  assert.equal(isValidUploadPath("/uploads/abcdef0123.pdf", "file"), true);
+  assert.equal(isValidUploadPath("/uploads/abcdef0123.mp4", "file"), true);
+  assert.equal(isValidUploadPath("/uploads/abcdef0123.docx", "attachment"), true);
+  assert.equal(isValidUploadPath("/uploads/abcdef0123.exe", "file"), false);
 });
