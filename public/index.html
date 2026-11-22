@@ -58,14 +58,7 @@
  <div class="media-editor">
   <div class="media-track-title"><b id="mediaTrackTitle">Выбери композицию</b><small id="mediaTrackSubtitle">Личная коллекция</small></div>
   <div class="media-timeline" id="mediaTimeline">
-   <div class="media-waveform" id="mediaWaveform" aria-hidden="true">
-    <svg viewBox="0 0 600 24" preserveAspectRatio="none" aria-hidden="true">
-     <path class="media-wave-base" d="M0 12 C 12 4 13 4 25 12 S 38 20 50 12 C 62 4 63 4 75 12 S 88 20 100 12 C 112 4 113 4 125 12 S 138 20 150 12 C 162 4 163 4 175 12 S 188 20 200 12 C 212 4 213 4 225 12 S 238 20 250 12 C 262 4 263 4 275 12 S 288 20 300 12 C 312 4 313 4 325 12 S 338 20 350 12 C 362 4 363 4 375 12 S 388 20 400 12 C 412 4 413 4 425 12 S 438 20 450 12 C 462 4 463 4 475 12 S 488 20 500 12 C 512 4 513 4 525 12 S 538 20 550 12 C 562 4 563 4 575 12 S 588 20 600 12"/>
-     <path class="media-wave-active" d="M0 12 C 12 4 13 4 25 12 S 38 20 50 12 C 62 4 63 4 75 12 S 88 20 100 12 C 112 4 113 4 125 12 S 138 20 150 12 C 162 4 163 4 175 12 S 188 20 200 12 C 212 4 213 4 225 12 S 238 20 250 12 C 262 4 263 4 275 12 S 288 20 300 12 C 312 4 313 4 325 12 S 338 20 350 12 C 362 4 363 4 375 12 S 388 20 400 12 C 412 4 413 4 425 12 S 438 20 450 12 C 462 4 463 4 475 12 S 488 20 500 12 C 512 4 513 4 525 12 S 538 20 550 12 C 562 4 563 4 575 12 S 588 20 600 12"/>
-     <path class="media-wave-flow" d="M0 12 C 12 4 13 4 25 12 S 38 20 50 12 C 62 4 63 4 75 12 S 88 20 100 12 C 112 4 113 4 125 12 S 138 20 150 12 C 162 4 163 4 175 12 S 188 20 200 12 C 212 4 213 4 225 12 S 238 20 250 12 C 262 4 263 4 275 12 S 288 20 300 12 C 312 4 313 4 325 12 S 338 20 350 12 C 362 4 363 4 375 12 S 388 20 400 12 C 412 4 413 4 425 12 S 438 20 450 12 C 462 4 463 4 475 12 S 488 20 500 12 C 512 4 513 4 525 12 S 538 20 550 12 C 562 4 563 4 575 12 S 588 20 600 12"/>
-    </svg>
-    <span class="media-wave-playhead"></span>
-   </div>
+   <m-progress class="media-waveform m3-native-progress" id="mediaWaveform" variant="linear" shape="wavy" thickness="4" value="0" max="100" aria-label="Прогресс воспроизведения"></m-progress>
    <input id="mediaSeek" class="media-wave-range" type="range" min="0" max="1000" value="0" aria-label="Позиция воспроизведения">
    <div class="media-timecodes"><span id="mediaCurrent">00:00</span><span id="mediaDuration">00:00</span></div>
   </div>
@@ -77,12 +70,7 @@
 </aside>
 <div id="transferProgress" class="m3-transfer-progress hidden" aria-live="polite">
   <div class="m3-transfer-label"><span id="transferLabel">Подготовка файла…</span><b id="transferValue">0%</b></div>
-  <div class="m3-wavy-progress" id="transferWave" role="progressbar" aria-label="Отправка файла" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-   <svg viewBox="0 0 600 26" preserveAspectRatio="none" aria-hidden="true">
-    <path class="m3-progress-track-path" d="M0 13 C12 0 24 0 36 13 S60 26 72 13 S96 0 108 13 S132 26 144 13 S168 0 180 13 S204 26 216 13 S240 0 252 13 S276 26 288 13 S312 0 324 13 S348 26 360 13 S384 0 396 13 S420 26 432 13 S456 0 468 13 S492 26 504 13 S528 0 540 13 S564 26 576 13 S588 0 600 13"/>
-    <path class="m3-progress-active-path" d="M0 13 C12 0 24 0 36 13 S60 26 72 13 S96 0 108 13 S132 26 144 13 S168 0 180 13 S204 26 216 13 S240 0 252 13 S276 26 288 13 S312 0 324 13 S348 26 360 13 S384 0 396 13 S420 26 432 13 S456 0 468 13 S492 26 504 13 S528 0 540 13 S564 26 576 13 S588 0 600 13"/>
-   </svg>
-  </div>
+  <m-progress id="transferWave" class="m3-transfer-native-progress" variant="linear" shape="wavy" thickness="4" value="0" max="100" aria-label="Отправка файла"></m-progress>
  </div>
 
 <div id="modalRoot"></div><div id="toast" class="toast"></div>
