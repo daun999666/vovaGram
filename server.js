@@ -139,7 +139,15 @@ ensureColumn("chats","wallpaper","TEXT DEFAULT ''");
 ensureColumn("chats","slow_mode_seconds","INTEGER DEFAULT 0");
 ensureColumn("chats","username","TEXT");
 ensureColumn("chats","new_member_restriction_seconds","INTEGER DEFAULT 0");
-ensureColumn("members","joined_at","TEXT DEFAULT CURRENT_TIMESTAMP");
+ensureColumn("members","joined_at","TEXT DEFAULT ''");
+db.exec("UPDATE members SET joined_at=CURRENT_TIMESTAMP WHERE joined_at IS NULL OR joined_at=''");
+db.exec(`CREATE TRIGGER IF NOT EXISTS members_joined_at_default
+AFTER INSERT ON members
+WHEN NEW.joined_at IS NULL OR NEW.joined_at=''
+BEGIN
+  UPDATE members SET joined_at=CURRENT_TIMESTAMP
+  WHERE chat_id=NEW.chat_id AND user_id=NEW.user_id;
+END`);
 db.exec("CREATE TABLE IF NOT EXISTS chat_events (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,actor_id INTEGER,event_type TEXT NOT NULL,target_id INTEGER,details TEXT DEFAULT '{}',created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_chat_events_chat ON chat_events(chat_id,id DESC)");
 db.exec("CREATE TABLE IF NOT EXISTS chat_settings_history (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,actor_id INTEGER NOT NULL,changes TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
