@@ -575,6 +575,49 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
   const messages=rows.slice(0,limit).reverse();
   res.json({messages,hasMore,nextCursor:messages[0]?.id||null});
 });
+app.get("/api/chats/:id/active-members",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id))return res.status(403).json({error:"Нет доступа"});
+  const onlineIds=new Set([...onlineUsers.values()]);
+  const members=q("SELECT u.id,u.username,u.display_name,u.avatar,m.role AS chat_role FROM members m JOIN users u ON u.id=m.user_id WHERE m.chat_id=? ORDER BY u.display_name COLLATE NOCASE").all(id);
+  res.json({members:members.map(member=>({...member,online:onlineIds.has(member.id)})),onlineCount:members.filter(member=>onlineIds.has(member.id)).length});
+});
+app.get("/api/chats/:id/events",auth,(req,res)=>{
+  const id=Number(req.params.id),limit=boundedInteger(req.query.limit,50,1,100);
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id))return res.status(403).json({error:"Нет доступа"});
+  const events=q("SELECT e.id,e.event_type,e.target_id,e.details,e.created_at,e.actor_id,u.display_name AS actor_name,t.display_name AS target_name FROM chat_events e LEFT JOIN users u ON u.id=e.actor_id LEFT JOIN users t ON t.id=e.target_id WHERE e.chat_id=? ORDER BY e.id DESC LIMIT ?").all(id,limit);
+  res.json({events:events.map(event=>({...event,details:JSON.parse(event.details||"{}")}))});
+});
+app.get("/api/chats/:id/settings-history",auth,(req,res)=>{
+  const id=Number(req.params.id),actor=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
+  if(!actor)return res.status(403).json({error:"Нет доступа"});
+  if(!["owner","admin"].includes(actor.role)&&!["owner","dev"].includes(req.user.role))return res.status(403).json({error:"История настроек доступна администраторам"});
+  const history=q("SELECT h.id,h.changes,h.created_at,u.display_name AS actor_name FROM chat_settings_history h JOIN users u ON u.id=h.actor_id WHERE h.chat_id=? ORDER BY h.id DESC LIMIT 100").all(id);
+  res.json({history:history.map(row=>({...row,changes:JSON.parse(row.changes)}))});
+});
+app.post("/api/chats/:id/members/bulk",auth,(req,res)=>{
+  const chatId=Number(req.params.id),actor=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!actor)return res.status(403).json({error:"Нет доступа"});
+  const root=["owner","dev"].includes(req.user.role);
+  if(!root&&!["owner","admin"].includes(actor.role))return res.status(403).json({error:"Недостаточно прав"});
+  const ids=[...new Set((Array.isArray(req.body.userIds)?req.body.userIds:[]).map(Number).filter(id=>Number.isSafeInteger(id)&&id>0))].slice(0,50);
+  if(!ids.length)return res.status(400).json({error:"Выберите участников"});
+  const action=String(req.body.action||"");
+  if(!["remove","mute"].includes(action))return res.status(400).json({error:"Недопустимое массовое действие"});
+  const changed=[];
+  db.transaction(()=>{
+    for(const userId of ids){
+      const target=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,userId);
+      if(!target||userId===req.user.id||target.role==="owner")continue;
+      if(!root&&actor.role==="admin"&&target.role!=="member")continue;
+      if(action==="remove"){q("DELETE FROM members WHERE chat_id=? AND user_id=?").run(chatId,userId);changed.push(userId);}
+      else {q("INSERT INTO chat_member_restrictions(chat_id,user_id,restricted_until,restricted_by) VALUES(?,?,?,?) ON CONFLICT(chat_id,user_id) DO UPDATE SET restricted_until=excluded.restricted_until,restricted_by=excluded.restricted_by").run(chatId,userId,Math.floor(Date.now()/1000)+3600,req.user.id);changed.push(userId);}
+    }
+    if(changed.length)q("INSERT INTO chat_events(chat_id,actor_id,event_type,details) VALUES(?,?,?,?)").run(chatId,req.user.id,action==="remove"?"members_bulk_removed":"members_bulk_muted",JSON.stringify({userIds:changed}));
+  })();
+  io.to("chat:"+chatId).emit("chat-members-updated",{chatId});
+  res.json({ok:true,action,changed,skipped:ids.length-changed.length});
+});
 app.get("/api/chats/:id/members",auth,(req,res)=>{
   const id=Number(req.params.id);
   if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id))
