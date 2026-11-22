@@ -514,11 +514,11 @@ async function chatDetails(c){
  const dialog=modal('Информация о чате','Параметры пространства',formHtml+memberPanel+preferenceHtml,actions);
  const updatePreference=async(field,value)=>{
   try{
+   if(field==='muted'&&!value&&'Notification' in window&&Notification.permission==='default') await Notification.requestPermission();
    await api('/api/chats/'+c.id+'/preferences',{method:'PATCH',body:JSON.stringify({[field]:value})});
    await loadChats();
    if(state.active?.id===c.id)state.active=state.chats.find(x=>x.id===c.id)||state.active;
    closeModal();
-   if(field==='muted'&&!value&&'Notification' in window&&Notification.permission==='default') await Notification.requestPermission();
    toast(field==='starred'?(value?'Добавлено в избранное':'Убрано из избранного'):field==='muted'?(value?'Уведомления отключены':'Уведомления включены'):(value?'Перемещено в архив':'Возвращено из архива'));
   }catch(e){toast(e.message)}
  };
@@ -651,6 +651,18 @@ function showIncomingNotification(message){
  const notification=new Notification(chat.title,{body:sender+': '+preview,icon:'/icons/icon.svg',tag:'vovchikgram-chat-'+chat.id});
  notification.onclick=()=>{window.focus();const target=state.chats.find(x=>x.id===chat.id);if(target)openChat(chat.id);notification.close()};
 }
+document.addEventListener('visibilitychange',async()=>{
+ if(document.hidden||!state.active)return;
+ const chatId=state.active.id;
+ try{
+  const data=await api('/api/chats/'+chatId+'/messages?limit=50');
+  if(state.active?.id!==chatId)return;
+  $('#messages').innerHTML='';data.messages.forEach(m=>addMessage(m));
+  state.messageHasMore=!!data.hasMore;updateLoadMoreButton();
+  $('#messages').scrollTop=$('#messages').scrollHeight;
+  await markChatRead(chatId);
+ }catch(e){/* reconnect and refresh again on the next focus */}
+});
 function initSocket(){
  state.socket?.disconnect();state.socket=io({auth:{token:state.token}});
  state.socket.on('presence-snapshot',d=>{state.onlineUsers=new Set((d.userIds||[]).map(Number));renderChats()});
