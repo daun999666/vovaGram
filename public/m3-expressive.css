@@ -668,3 +668,28 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .m3-search-hit .message-content{outline:2px solid color-mix(in srgb,var(--primary) 70%,transparent);outline-offset:3px;animation:m3-search-pulse 1.4s ease}
 @keyframes m3-search-pulse{0%,100%{outline-color:transparent}35%{outline-color:var(--primary)}}
 @media(max-width:560px){.folder-tabs{margin-inline:-2px}.folder-tabs .folder{font-size:10px;padding-inline:10px}}
+
+
+/* Message origin, edit history and forwarding */
+.message-forward{
+ display:flex;align-items:center;gap:7px;margin:0 0 7px;padding:7px 9px;
+ border-left:3px solid var(--primary);border-radius:0 10px 10px 0;
+ background:color-mix(in srgb,var(--primary) 8%,var(--surface2));
+ color:var(--primary);font-size:11px;
+}
+.message-forward>.material-symbols-rounded{font-size:17px;margin:0;flex:none}
+.message-forward>span:last-child{display:flex;flex-direction:column;gap:1px;min-width:0}
+.message-forward b,.message-forward small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.message-forward small{color:var(--muted);font-size:10px}
+.message-forward-count{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:10px;margin-right:4px}
+.message-forward-count .material-symbols-rounded{font-size:13px;margin:0}
+.m3-forward-choice{
+ display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;margin:5px 0;
+ border-radius:15px;background:var(--surface2);text-align:left;color:var(--text);
+}
+.m3-forward-choice>.material-symbols-rounded{font-size:20px;color:var(--primary);margin:0}
+.m3-forward-choice span:last-child{display:flex;flex-direction:column;gap:2px}
+.m3-forward-choice small{font-size:10px;color:var(--muted)}
+.m3-history-entry{padding:10px 12px;margin:8px 0;border-radius:15px;background:var(--surface2)}
+.m3-history-entry small{font-size:10px;color:var(--muted)}
+.m3-history-entry p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
