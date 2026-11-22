@@ -218,13 +218,13 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
     method: "POST", body: JSON.stringify({ kind: "audio", data: "data:audio/wav;base64," + wavBytes.toString("base64") })
   });
   assert.equal(wavUpload.status, 200, JSON.stringify(wavUpload.body));
-  assert.match(wavUpload.body.url, /\\.wav$/);
+  assert.match(wavUpload.body.url, /\.wav$/);
   const m4aBytes = Buffer.from("0000ftypM4A ");
   const m4aUpload = await request(baseUrl, ownerToken, "/api/upload", {
     method: "POST", body: JSON.stringify({ kind: "audio", data: "data:audio/x-m4a;base64," + m4aBytes.toString("base64") })
   });
   assert.equal(m4aUpload.status, 200, JSON.stringify(m4aUpload.body));
-  assert.match(m4aUpload.body.url, /\\.m4a$/);
+  assert.match(m4aUpload.body.url, /\.m4a$/);
   const savedWavSong = await request(baseUrl, ownerToken, "/api/songs", {
     method: "POST", body: JSON.stringify({ title: "WAV smoke", url: wavUpload.body.url })
   });
