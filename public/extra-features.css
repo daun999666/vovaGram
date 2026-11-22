@@ -24,3 +24,13 @@
 .vg-extra-preview{grid-column:1/-1;display:grid;gap:8px;padding:14px;border:1px solid var(--outline);border-radius:18px;background:var(--surface)}.vg-preview-bubble{justify-self:start;max-width:80%;padding:11px 15px;border-radius:18px 18px 18px 5px;background:var(--surface2);font-size:13px}.vg-preview-chat{padding:10px 12px;border-radius:12px;background:var(--surface2);font-size:12px}.vg-extra-panel button,.vg-color-menu button,.vg-lightbox button{touch-action:manipulation}.vg-extra-panel button,.vg-color-menu button{min-height:38px}.vg-extra-panel :focus-visible,.vg-color-menu :focus-visible{outline:3px solid var(--primary);outline-offset:3px}
 
 .chat-clock{font-variant-numeric:tabular-nums}
+
+/* Bold, expressive typography; uploaded fonts override the default family globally */
+html,body,button,input,textarea,select{font-family:var(--vg-user-font,var(--font-family,'Roboto',system-ui,sans-serif))!important}
+body{font-weight:650}
+button,input,textarea,select,.chat-item,.message-content p,.message-content,.topbar,.sidebar{font-weight:600}
+.welcome h1,.vg-extra-panel h2,.brand b,.topbar #topTitle>b,.chat-item .chat-meta>b,.message-content .sender b{font-weight:800}
+.font-upload-card{display:grid;gap:8px;padding:13px;border:1px solid var(--outline);border-radius:16px;background:var(--surface2)}
+.font-upload-card>b{font-size:13px}.font-upload-card>small,.font-upload-card>span{line-height:1.5}
+.font-upload-card .upload-label,.font-upload-card>button{width:max-content;max-width:100%;cursor:pointer}
+.chat-clock{font-variant-numeric:tabular-nums}

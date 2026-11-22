@@ -1042,14 +1042,14 @@ h1,h2,h3,h4,.modal-head h2,.settings-section h3,.brand b,.topbar b,.chat-item b,
  --m3-type-title-weight:750;
  --m3-type-display-weight:800;
 }
-body{font-weight:var(--m3-type-body-weight);font-variation-settings:'wght' 450,'opsz' 14}
+body{font-weight:650;font-variation-settings:'wght' 650,'opsz' 14}
 .brand b,.topbar #topTitle>b,.chat-item .chat-meta>b,.message-content .sender b,
 .modal h2,.welcome h1,.section-label{
- font-weight:var(--m3-type-title-weight);
+ font-weight:800;
  font-variation-settings:'wght' 750,'opsz' 18,'GRAD' 20;
  letter-spacing:-.025em;
 }
-.welcome h1{font-weight:var(--m3-type-display-weight);font-variation-settings:'wght' 800,'opsz' 32,'GRAD' 25;letter-spacing:-.04em}
+.welcome h1{font-weight:850;font-variation-settings:'wght' 800,'opsz' 32,'GRAD' 25;letter-spacing:-.04em}
 .message.m3-message{
  position:relative;
  width:fit-content!important;

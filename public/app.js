@@ -30,8 +30,8 @@ function applyTheme(name){
 function applyUI(){
  const r=document.documentElement;
  r.style.setProperty('--font-scale',state.ui.fontScale||1);
- r.style.setProperty('--m3-font-weight',state.ui.fontWeight||600);
- r.style.setProperty('--m3-title-weight',Math.min(900,(state.ui.fontWeight||600)+140));
+ r.style.setProperty('--m3-font-weight',650);
+ r.style.setProperty('--m3-title-weight',800);
  r.style.setProperty('--font-family',fontFamilies[state.ui.fontFamily]||fontFamilies.google);
  r.style.setProperty('--bubble-radius',(state.ui.bubbleRadius||20)+'px');
  r.style.setProperty('--chat-gap',(state.ui.chatGap||10)+'px');
@@ -264,7 +264,7 @@ function addMessage(m,{prepend=false}={}){
  el.innerHTML='<div class="message-avatar">'+avatar(senderAvatar,senderName,'sender-avatar')+'</div>'+
   '<div class="message-content">'+forwardHeader+'<div class="sender"><b>'+esc(senderName)+'</b> '+(m.sender_is_channel?'':badge(mine?state.user:m))+(m.chat_role==='owner'?'<small class="message-role-chip">Владелец</small>':m.chat_role==='admin'?'<small class="message-role-chip">Админ</small>':'')+'</div>'+
   reply+(m.body?'<p>'+formatMessageBody(m.body)+'</p>':'')+media+
-  '<div class="message-foot"><time>'+time+(m.edited_at?' · изм.':'')+'</time>'+(state.active?.type==='channel'&&Number(m.view_count)>0?'<small class="channel-view-count">'+m3Icon('visibility')+' '+Number(m.view_count)+'</small>':'')+
+  '<div class="message-foot"><time datetime="'+(Number.isNaN(date.getTime())?'':date.toISOString())+'">'+time+(m.edited_at?' · изм.':'')+'</time>'+(state.active?.type==='channel'&&Number(m.view_count)>0?'<small class="channel-view-count">'+m3Icon('visibility')+' '+Number(m.view_count)+'</small>':'')+
   (mine?'<button type="button" class="message-read" data-readers title="'+(Number(m.read_by_count)>0?'Кто прочитал':'Отправлено')+'" aria-label="Кто прочитал">'+m3Icon(Number(m.read_by_count)>0?'done_all':'done')+'</button>':'')+
   forwardCount+'</div><div class="reactions">'+react+'</div><span class="message-actions" role="group" aria-label="Действия с сообщением">'+
   '<button data-quote-selection class="message-quote-selection" hidden>Цитировать выделенное</button>'+
@@ -805,8 +805,9 @@ function settings(){
  <div class="settings-search-wrap"><span class="material-symbols-rounded">search</span><input id="settingsSearch" type="search" placeholder="Поиск по настройкам" autocomplete="off"><span id="settingsSearchCount" class="muted"></span></div>
  <div class="settings-section"><h3>Оформление</h3><label class="field"><span>Стиль интерфейса</span><select id="visualStyle"><option value="material" ${(state.ui.visualStyle||"material")==="material"?"selected":""}>Material 3 Expressive</option><option value="liquid" ${state.ui.visualStyle==="liquid"?"selected":""}>Liquid Glass · Жидкое стекло</option></select></label><span class="muted">Палитра Material You</span><div class="palette">${Object.entries(themes).map(([k,v])=>`<button class="palette-item ${state.theme===k?'selected':''}" data-theme="${k}" style="--swatch:${v.primary}" title="${k}"><i></i><span>${({blue:'Ocean',green:'Forest',purple:'Lavender',rose:'Rose',orange:'Sand',mono:'Mono'})[k]}</span></button>`).join('')}</div>
  <label class="field"><span>Размер шрифта <b id="fontLabel">${Math.round((state.ui.fontScale||1)*100)}%</b></span><input id="fontSize" type="range" min="85" max="145" value="${Math.round((state.ui.fontScale||1)*100)}"></label>
- <label class="field"><span>Насыщенность шрифта <b id="fontWeightLabel">${state.ui.fontWeight||600}</b></span><input id="fontWeight" type="range" min="400" max="800" step="25" value="${state.ui.fontWeight||600}"><small class="muted">Выразительное начертание Material 3</small></label>
  <label class="field"><span>Шрифт интерфейса</span><select id="fontFamily">${Object.entries(fonts).map(([k,v])=>`<option value="${k}" ${(state.ui.fontFamily||'google')===k?'selected':''}>${v}</option>`).join('')}</select></label>
+ <div class="font-upload-card"><b>Свой шрифт</b><small class="muted">Загрузи .OTF или .TTF — файл сохранится в этом браузере и применится ко всему интерфейсу.</small><label class="soft-btn upload-label">Выбрать файл шрифта<input id="vgCustomFontFile" type="file" accept=".otf,.ttf,font/otf,font/ttf" hidden></label><span id="vgCustomFontStatus" class="muted">Системный шрифт приложения</span><button type="button" id="vgCustomFontReset" class="soft-btn">Убрать свой шрифт</button></div>
+ <label class="field"><span>Часовой пояс</span><select id="vgTimezone"><option value="local">Системный</option><option value="Europe/Amsterdam">Амстердам</option><option value="Europe/Moscow">Москва</option><option value="UTC">UTC</option><option value="Europe/London">Лондон</option><option value="Europe/Berlin">Берлин</option><option value="America/New_York">Нью-Йорк</option><option value="Asia/Tokyo">Токио</option></select></label>
  <label class="field"><span>Скругление сообщений <b id="radiusLabel">${state.ui.bubbleRadius||20}px</b></span><input id="bubbleRadius" type="range" min="8" max="32" value="${state.ui.bubbleRadius||20}"></label>
  <label class="field"><span>Расстояние между сообщениями <b id="gapLabel">${state.ui.chatGap||10}px</b></span><input id="chatGap" type="range" min="4" max="24" value="${state.ui.chatGap||10}"></label>
  <label class="field"><span>Плотность списка</span><select id="density"><option value="normal">Обычная</option><option value="compact" ${state.ui.density==='compact'?'selected':''}>Компактная</option></select></label>
@@ -834,7 +835,7 @@ function settings(){
  const settingsSearch=$('#settingsSearch'),settingsSections=[...m.querySelectorAll('.settings-section')],settingsCount=$('#settingsSearchCount');
  settingsSearch.oninput=()=>{const q=settingsSearch.value.trim().toLocaleLowerCase();let visible=0;settingsSections.forEach(section=>{const show=!q||section.textContent.toLocaleLowerCase().includes(q);section.hidden=!show;if(show)visible++});settingsCount.textContent=q?`${visible} раздел(ов)` : '';};
  const bindRange=(id,key,label,suffix,mult=1)=>$('#'+id).oninput=e=>{state.ui[key]=Number(e.target.value)*mult;$('#'+label).textContent=e.target.value+suffix;applyUI();saveUI()};
- bindRange('fontSize','fontScale','fontLabel','%',.01);bindRange('fontWeight','fontWeight','fontWeightLabel','');bindRange('bubbleRadius','bubbleRadius','radiusLabel','px');bindRange('chatGap','chatGap','gapLabel','px');
+ bindRange('fontSize','fontScale','fontLabel','%',.01);bindRange('bubbleRadius','bubbleRadius','radiusLabel','px');bindRange('chatGap','chatGap','gapLabel','px');
  $('#visualStyle').onchange=e=>{state.ui.visualStyle=e.target.value;applyUI();saveUI();toast(e.target.value==='liquid'?'Liquid Glass включён':'Material 3 включён')};
  $('#fontFamily').onchange=e=>{state.ui.fontFamily=e.target.value;applyUI();saveUI()};
  $('#density').onchange=e=>{state.ui.density=e.target.value;applyUI();saveUI()};
