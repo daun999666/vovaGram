@@ -752,6 +752,20 @@ app.get("/api/hidden-messages",auth,(req,res)=>{
     WHERE h.user_id=? ORDER BY h.hidden_at DESC LIMIT 200`).all(req.user.id,req.user.id);
   res.json({messages:rows});
 });
+app.get("/api/messages/:id/reactions",auth,(req,res)=>{
+  const id=Number(req.params.id),message=q("SELECT chat_id,reactions FROM messages WHERE id=?").get(id);
+  if(!message||!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(message.chat_id,req.user.id))
+    return res.status(404).json({error:"Сообщение не найдено"});
+  const emoji=String(req.query.emoji||"").slice(0,12);
+  if(!emoji) return res.status(400).json({error:"Эмодзи не указано"});
+  let reactions={};try{reactions=JSON.parse(message.reactions||"{}")}catch{}
+  const ids=Array.isArray(reactions[emoji])?reactions[emoji].filter(id=>Number.isSafeInteger(Number(id))).map(Number):[];
+  if(!ids.length) return res.json({emoji,users:[]});
+  const placeholders=ids.map(()=>"?").join(",");
+  const users=q("SELECT id,username,display_name,avatar FROM users WHERE id IN ("+placeholders+")").all(...ids);
+  const byId=new Map(users.map(user=>[user.id,user]));
+  res.json({emoji,users:ids.map(userId=>byId.get(userId)).filter(Boolean)});
+});
 app.post("/api/messages/:id/reaction",auth,(req,res)=>{
   const id=Number(req.params.id), m=q("SELECT * FROM messages WHERE id=?").get(id);
   if(!m || !q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(m.chat_id,req.user.id)) return res.status(404).json({error:"Сообщение не найдено"});
