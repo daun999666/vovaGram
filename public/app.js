@@ -36,7 +36,7 @@ function applyUI(){
  r.dataset.dark=state.ui.dark?'true':'false';r.dataset.density=state.ui.density||'normal';
  applyTheme(state.theme);
 }
-function avatar(src,name,cls='avatar'){return src?`<img class="${cls} image-avatar" src="${esc(src)}" alt="">`:`<div class="${cls}">${esc((name||'?').trim().slice(0,1).toUpperCase())}</div>`}
+function avatar(src,name,cls='avatar'){return src?`<img class="${cls} image-avatar" src="${esc(src)}" alt="" loading="lazy" decoding="async">`:`<div class="${cls}">${esc((name||'?').trim().slice(0,1).toUpperCase())}</div>`}
 function badge(u){return u&&['owner','dev'].includes(u.role)?'<span class="verified" title="Подтверждённый аккаунт">✓</span>':''}
 function drawProfile(){const u=state.user;if(!u)return;const label=u.displayName||u.username;$('#drawerProfile').innerHTML=`${avatar(u.avatar,label)}<span class="profile-label"><b>${esc(label)} ${badge(u)}</b><small>@${esc(u.username)} · ${esc(u.number||'')}</small></span><span class="profile-more">⌄</span>`;$('#profileBtn').innerHTML=avatar(u.avatar,label,'top-avatar');$('#accountBtn').textContent='@'+u.username;$('#navDrawerAccount').innerHTML=`${avatar(u.avatar,label,'nav-avatar')}<div><b>${esc(label)} ${badge(u)}</b><small>@${esc(u.username)} · ${esc(u.number||'')}</small></div>`;$('#drawerAdmin').classList.toggle('hidden',!['owner','dev'].includes(u.role));$('#drawerThemeState').textContent=state.ui.dark?'Вкл.':'Выкл.'}
 function showAuth(){const m=modal('vovchikGram','Войди или создай аккаунт',`<div class="segmented"><button id="loginTab" class="selected" type="button">Войти</button><button id="registerTab" type="button">Регистрация</button></div><form id="authForm"><label class="field"><span>Юзернейм</span><input name="username" minlength="3" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="your_name" required></label><label class="field"><span>Пароль</span><input name="password" type="password" minlength="8" autocomplete="current-password" required></label><label class="field hidden" id="displayField"><span>Имя в профиле</span><input name="displayName" maxlength="40" placeholder="Как тебя называть"></label><p id="authError" class="auth-error hidden" role="alert"></p><button class="filled full" id="authSubmit" type="submit">Войти</button></form>`,'');let mode='login';const setMode=next=>{mode=next;$('#loginTab').classList.toggle('selected',mode==='login');$('#registerTab').classList.toggle('selected',mode==='register');$('#displayField').classList.toggle('hidden',mode!=='register');$('#authSubmit').textContent=mode==='login'?'Войти':'Создать аккаунт';$('#authError').classList.add('hidden');$('#authForm [name=password]').autocomplete=mode==='login'?'current-password':'new-password'};$('#loginTab').onclick=()=>setMode('login');$('#registerTab').onclick=()=>setMode('register');$('#authForm').onsubmit=async e=>{e.preventDefault();const submit=$('#authSubmit'),err=$('#authError');submit.disabled=true;submit.textContent='Подождите…';err.classList.add('hidden');const data=Object.fromEntries(new FormData(e.target));data.username=String(data.username||'').trim().replace(/^@/,'').toLowerCase();try{const d=await api('/api/'+mode,{method:'POST',body:JSON.stringify(data)});state.token=d.token;localStorage.setItem('vg_token',d.token);closeModal();await init()}catch(error){err.textContent=error.message==='Неверный юзернейм или пароль'?'Не удалось войти. Проверь юзернейм и пароль, а также ту ли базу данных использует сервер.':error.message;err.classList.remove('hidden')}finally{if($('#authSubmit')){submit.disabled=false;submit.textContent=mode==='login'?'Войти':'Создать аккаунт'}}}}
@@ -59,9 +59,13 @@ function renderChats(){
    avatar(c.avatar,c.title,'chat-avatar')+
    '<span class="chat-meta"><b>'+esc(c.title)+' '+(c.type==='channel'?'<span class="tiny-verified">◉</span>':'')+(Number(c.is_pinned)?'<span class="chat-pin-mark"><span class="material-symbols-rounded">push_pin</span></span>':'')+(Number(c.is_starred)?'<span class="chat-favorite-mark">★</span>':'')+'</b>'+
    '<small>'+(online?'<i class="chat-presence-dot"></i>':'')+esc(c.last_message||c.description||'Пока нет сообщений')+'</small></span>'+
-   '<span class="chat-time">'+(c.last_time?new Date(c.last_time+'Z').toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'')+(unread?'<i class="chat-unread-badge">'+(unread>99?'99+':unread)+'</i>':'')+'</span></button>';
+   '<span class="chat-time">'+(c.last_time?new Date(c.last_time+'Z').toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'')+(unread?'<i class="chat-unread-badge">'+(unread>99?'99+':unread)+'</i>':'')+'<span class="chat-quick-action" data-chat-quick="'+c.id+'" role="button" tabindex="0" aria-label="Быстрые действия для '+esc(c.title)+'" title="Быстрые действия">⋯</span></span></button>';
  }).join('')||'<div class="empty">Здесь пока нет чатов</div>';
  list.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{openChat(+b.dataset.id);$('#sidebar').classList.remove('open')});
+ list.querySelectorAll('[data-chat-quick]').forEach(action=>{
+  const openActions=event=>{event.preventDefault();event.stopPropagation();const chat=state.chats.find(item=>item.id===Number(action.dataset.chatQuick));if(!chat)return;const dialog=modal('Быстрые действия',chat.title,'<button class="command-item" data-quick="info">Информация о чате</button><button class="command-item" data-quick="pin">'+(Number(chat.is_pinned)?'Открепить':'Закрепить')+' чат</button><button class="command-item" data-quick="favorite">'+(Number(chat.is_starred)?'Убрать из избранного':'В избранное')+'</button><button class="command-item" data-quick="archive">'+(Number(chat.is_archived)?'Вернуть из архива':'В архив')+'</button>');dialog.querySelectorAll('[data-quick]').forEach(button=>button.onclick=async()=>{const choice=button.dataset.quick;closeModal();if(choice==='info')chatDetails(chat);else{const field=choice==='pin'?'pinned':choice==='favorite'?'starred':'archived';try{await api('/api/chats/'+chat.id+'/preferences',{method:'PATCH',body:JSON.stringify({[field]:!Number(field==='pinned'?chat.is_pinned:field==='starred'?chat.is_starred:chat.is_archived)})});await loadChats();toast('Настройки чата обновлены')}catch(error){toast(error.message)}}})};
+  action.addEventListener('click',openActions);action.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){openActions(event)}});
+ });
 }
 async function loadChats(){const d=await api('/api/chats');state.chats=d.chats;renderChats()}
 function setWallpaper(value){
@@ -825,6 +829,7 @@ function updatePlayerLabels(){
  const a=$('#audioPlayer'),song=state.currentSong,playing=!a.paused&&!!a.src;
  $('#mediaTrackTitle').textContent=song?.title||'Выбери композицию';
  $('#mediaTrackSubtitle').textContent=song?'Личная коллекция':'Персональный плеер vovchikGram';
+ const speed=$('#mediaSpeedValue');if(speed)speed.textContent=Number(a.playbackRate||1)+'×';
  $('#trackName').textContent=song?.title||'Нет трека';
  $('#mediaCurrent').textContent=formatTime(a.currentTime);
  $('#mediaDuration').textContent=formatTime(a.duration);
@@ -852,7 +857,22 @@ function updatePlayerLabels(){
 }
 function openMedia(){if(!state.user)return showAuth();const panel=$('#mediaPanel');clearTimeout(closeMedia.timer);panel.classList.remove('hidden');panel.classList.remove('media-panel-open');void panel.offsetWidth;panel.classList.add('media-panel-open');loadSongs()}
 function closeMedia(){const panel=$('#mediaPanel');panel.classList.remove('media-panel-open');clearTimeout(closeMedia.timer);closeMedia.timer=setTimeout(()=>panel.classList.add('hidden'),220)}
-function playSong(song){if(!song)return;state.currentSong=song;$('#playerDock').classList.remove('hidden');$('#audioPlayer').src=song.file_url;$('#audioPlayer').play().catch(()=>{});updatePlayerLabels();loadSongs()}
+function readSongPositions(){try{return JSON.parse(localStorage.getItem('vg_song_positions')||'{}')}catch{return {}}}
+function saveSongPosition(){
+ const audio=$('#audioPlayer'),song=state.currentSong;if(!song||!Number.isFinite(audio.currentTime))return;
+ const positions=readSongPositions();positions[song.id]=audio.currentTime;
+ localStorage.setItem('vg_song_positions',JSON.stringify(positions));
+}
+let lastPositionBucket=-1;
+function playSong(song){
+ if(!song)return;
+ saveSongPosition();state.currentSong=song;lastPositionBucket=-1;
+ $('#playerDock').classList.remove('hidden');
+ const audio=$('#audioPlayer');audio.src=song.file_url;
+ const restore=()=>{const position=Number(readSongPositions()[song.id])||0;if(position>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(position,Math.max(0,audio.duration-0.25));audio.play().catch(()=>{});audio.removeEventListener('loadedmetadata',restore)};
+ audio.addEventListener('loadedmetadata',restore);
+ updatePlayerLabels();loadSongs();
+}
 function stepSong(delta){
  if(!state.songs.length)return;
  let i=state.songs.findIndex(x=>x.id===state.currentSong?.id);
@@ -871,7 +891,12 @@ function handleSongEnded(){
  if(index>=0&&index<state.songs.length-1){playSong(state.songs[index+1]);return}
  updatePlayerLabels();
 }
-$('#audioPlayer').addEventListener('timeupdate',updatePlayerLabels);$('#audioPlayer').addEventListener('durationchange',updatePlayerLabels);$('#audioPlayer').addEventListener('play',updatePlayerLabels);$('#audioPlayer').addEventListener('pause',updatePlayerLabels);$('#audioPlayer').addEventListener('ended',handleSongEnded);
+$('#audioPlayer').addEventListener('timeupdate',()=>{updatePlayerLabels();const bucket=Math.floor($('#audioPlayer').currentTime/5);if(bucket!==lastPositionBucket){lastPositionBucket=bucket;saveSongPosition()}});
+$('#audioPlayer').addEventListener('durationchange',updatePlayerLabels);
+$('#audioPlayer').addEventListener('play',updatePlayerLabels);
+$('#audioPlayer').addEventListener('pause',()=>{saveSongPosition();updatePlayerLabels()});
+$('#audioPlayer').addEventListener('ended',()=>{saveSongPosition();handleSongEnded()});
+$('#audioPlayer').addEventListener('error',()=>{if(state.currentSong){$('#mediaTrackSubtitle').textContent='Файл недоступен или формат не поддерживается';toast('Не удалось воспроизвести файл: '+state.currentSong.title);updatePlayerLabels()}});window.addEventListener('pagehide',saveSongPosition);
 $('#mediaSeek').oninput=e=>{const a=$('#audioPlayer');if(a.duration)a.currentTime=a.duration*Number(e.target.value)/1000;const p=Number(e.target.value)/10+'%';e.target.style.setProperty('--seek-progress',p);$('#mediaWaveform')?.style.setProperty('--seek-progress',p);updatePlayerLabels()};
 function togglePlayerPlayback(){
  const a=$('#audioPlayer');
@@ -890,7 +915,7 @@ document.addEventListener('keydown',event=>{
 });
 $('#mediaShuffle').onclick=()=>{state.shuffle=!state.shuffle;updatePlayerLabels();toast(state.shuffle?'Перемешивание включено':'Перемешивание выключено')};
 $('#mediaRepeat').onclick=()=>{state.repeatMode=state.repeatMode==='off'?'all':state.repeatMode==='all'?'one':'off';updatePlayerLabels();toast(state.repeatMode==='all'?'Повтор очереди включён':state.repeatMode==='one'?'Повтор трека включён':'Повтор выключен')};
-$('#mediaSpeed').onchange=e=>$('#audioPlayer').playbackRate=Number(e.target.value);
+$('#mediaSpeed').onchange=e=>{$('#audioPlayer').playbackRate=Number(e.target.value);$('#mediaSpeedValue').textContent=Number(e.target.value)+'×';updatePlayerLabels()};
 $('#mediaVolume').oninput=e=>{$('#audioPlayer').volume=Math.max(0,Math.min(1,Number(e.target.value)));};
 $('#mediaCompact').onclick=()=>{const compact=$('#mediaPanel').classList.toggle('is-compact');$('#mediaCompact').innerHTML='<span class="material-symbols-rounded">'+(compact?'unfold_more':'unfold_less')+'</span>';$('#mediaCompact').title=compact?'Развернуть медиатеку':'Компактный режим';};
 $('#mediaAddTrack').onclick=()=>$('#audioPicker').click();$('#dockOpenMedia').onclick=openMedia;$('#dockTrackOpen').onclick=openMedia;$('#closeMedia').onclick=closeMedia;
