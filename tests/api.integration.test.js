@@ -207,4 +207,10 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const privateSearch = await request(baseUrl, outsider.body.token, "/api/search/messages?q=second%20message");
   assert.equal(privateSearch.status, 200);
   assert.equal(privateSearch.body.messages.length, 0);
+  const deniedDraft = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/draft`);
+  assert.equal(deniedDraft.status, 403);
+  const deniedHide = await request(baseUrl, outsider.body.token, `/api/messages/${third.body.message.id}/hide`, {
+    method: "POST", body: "{}"
+  });
+  assert.equal(deniedHide.status, 403);
 });
