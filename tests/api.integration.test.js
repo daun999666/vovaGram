@@ -82,7 +82,12 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   });
   assert.equal(a.status, 200, JSON.stringify(a.body));
   assert.equal(b.status, 200, JSON.stringify(b.body));
-  const ownerToken = a.body.token, memberToken = b.body.token;
+  const guest = await request(baseUrl, null, "/api/register", {
+    method: "POST",
+    body: JSON.stringify({ username: "v2guest" + suffix, password: "test-password-123", displayName: "V2 Guest" })
+  });
+  assert.equal(guest.status, 200, JSON.stringify(guest.body));
+  const ownerToken = a.body.token, memberToken = b.body.token, guestToken = guest.body.token;
 
   const direct = await request(baseUrl, ownerToken, "/api/dm", {
     method: "POST", body: JSON.stringify({ username: "v2member" + suffix })
@@ -119,6 +124,50 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   });
   assert.equal(created.status, 200, JSON.stringify(created.body));
   const chatId = created.body.chat.id;
+
+  const initialMembers = await request(baseUrl, ownerToken, `/api/chats/${chatId}/members`);
+  assert.equal(initialMembers.status, 200);
+  assert.equal(initialMembers.body.members.length, 2);
+  const memberPromoted = await request(baseUrl, ownerToken, `/api/chats/${chatId}/members/${b.body.user.id}`, {
+    method: "PATCH", body: JSON.stringify({ role: "admin" })
+  });
+  assert.equal(memberPromoted.status, 200);
+  const adminCannotPromoteSelf = await request(baseUrl, memberToken, `/api/chats/${chatId}/members/${b.body.user.id}`, {
+    method: "PATCH", body: JSON.stringify({ role: "member" })
+  });
+  assert.equal(adminCannotPromoteSelf.status, 403);
+
+  const inviteCreated = await request(baseUrl, ownerToken, `/api/chats/${chatId}/invites`, {
+    method: "POST", body: JSON.stringify({ expiresInSeconds: 3600, maxUses: 1 })
+  });
+  assert.equal(inviteCreated.status, 200);
+  const inviteToken = inviteCreated.body.invite.token;
+  const invitePreview = await request(baseUrl, null, `/api/invites/${inviteToken}`);
+  assert.equal(invitePreview.status, 200);
+  assert.equal(invitePreview.body.invite.valid, true);
+  const inviteJoin = await request(baseUrl, guestToken, `/api/invites/${inviteToken}/join`, {
+    method: "POST", body: "{}"
+  });
+  assert.equal(inviteJoin.status, 200);
+  const exhaustedPreview = await request(baseUrl, null, `/api/invites/${inviteToken}`);
+  assert.equal(exhaustedPreview.body.invite.valid, false);
+  const secondJoin = await request(baseUrl, guestToken, `/api/invites/${inviteToken}/join`, {
+    method: "POST", body: "{}"
+  });
+  assert.equal(secondJoin.status, 410);
+
+  const adminCannotPromoteGuest = await request(baseUrl, memberToken, `/api/chats/${chatId}/members/${guest.body.user.id}`, {
+    method: "PATCH", body: JSON.stringify({ role: "admin" })
+  });
+  assert.equal(adminCannotPromoteGuest.status, 403);
+  const adminCanRemoveGuest = await request(baseUrl, memberToken, `/api/chats/${chatId}/members/${guest.body.user.id}`, {
+    method: "DELETE", body: "{}"
+  });
+  assert.equal(adminCanRemoveGuest.status, 200);
+  const ownerDemotesAdmin = await request(baseUrl, ownerToken, `/api/chats/${chatId}/members/${b.body.user.id}`, {
+    method: "PATCH", body: JSON.stringify({ role: "member" })
+  });
+  assert.equal(ownerDemotesAdmin.status, 200);
 
   const draftSaved = await request(baseUrl, ownerToken, `/api/chats/${chatId}/draft`, {
     method: "PUT", body: JSON.stringify({ body: "draft that must survive switching chats" })
