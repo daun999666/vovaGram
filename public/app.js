@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);
-const state={token:localStorage.getItem('vg_token'),user:null,chats:[],active:null,socket:null,theme:localStorage.getItem('vg_theme')||'blue',folder:'all',replyTo:null,ui:JSON.parse(localStorage.getItem('vg_ui')||'{}'),wallpaper:localStorage.getItem('vg_wallpaper')||'expressive',songs:[],currentSong:null,shuffle:false,repeatMode:'off',pendingImage:null,messageHasMore:false,loadingOlder:false,pins:[],onlineUsers:new Set(),typingTimer:null,draftTimer:null};
+const state={token:localStorage.getItem('vg_token'),user:null,chats:[],active:null,socket:null,theme:localStorage.getItem('vg_theme')||'blue',folder:'all',replyTo:null,ui:JSON.parse(localStorage.getItem('vg_ui')||'{}'),wallpaper:localStorage.getItem('vg_wallpaper')||'expressive',songs:[],currentSong:null,shuffle:false,repeatMode:'off',pendingImage:null,messageHasMore:false,loadingOlder:false,pins:[],selectedMessageIds:new Set(),selectionMode:false,onlineUsers:new Set(),typingTimer:null,draftTimer:null};
 const themes={blue:{primary:'#526da8',surface:'#f7f8ff',surface2:'#edf0fa',surface3:'#dfe5f5',bubble:'#e8edf9'},green:{primary:'#39765c',surface:'#f5faf6',surface2:'#e9f3ec',surface3:'#dcebe0',bubble:'#e4f1e7'},purple:{primary:'#72599d',surface:'#faf8ff',surface2:'#f0ebfa',surface3:'#e6def5',bubble:'#eee8f8'},rose:{primary:'#a45370',surface:'#fff8fa',surface2:'#f8edf1',surface3:'#f2dfe7',bubble:'#f8e8ee'},orange:{primary:'#946039',surface:'#fffaf5',surface2:'#f8efe5',surface3:'#f0e1d0',bubble:'#f5e9dc'},mono:{primary:'#555963',surface:'#f7f7f8',surface2:'#eeeeef',surface3:'#e2e3e5',bubble:'#e9e9eb'}};
 const fontFamilies={google:"'Roboto Flex',Roboto,Arial,sans-serif",roboto:"Roboto,Arial,sans-serif",inter:"Inter,'Roboto',sans-serif",system:"system-ui,-apple-system,'Segoe UI',sans-serif"};
 const emojiGroups={Часто:'😀 😃 😄 😁 😆 😅 😂 🙂 🙃 😉 😊 😍 🥰 😎 🤔 🥳 😭 😡 ❤️ 🧡 💛 💚 💙 💜 🤍 👍 👎 🙌 👏 🔥 ✨ 🎉 💯',Лица:'😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😋 😛 😜 🤪 😎 🤓 🧐 🤔 🤫 🤭 🫡 🤗 🫠 😐 😑 😶 🙄 😏 😣 😥 😮 🤐 😯 😪 😫 🥱 😴 😵 🤯 🥺 😢 😭 😤 😠 😡 🤬 🤒 🤕 🤧 🥵 🥶',Жесты:'👋 🤚 🖐️ ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🙏 💪 🦾',Символы:'❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 🔥 ✨ ⭐ 🌟 💫 ⚡ ☀️ 🌈 ☁️ ❄️ 🌙 ☕ 🍀 🎵 🎶 💯 ✅ ❌ ⚠️'};
@@ -33,7 +33,7 @@ function applyUI(){
  r.style.setProperty('--font-family',fontFamilies[state.ui.fontFamily]||fontFamilies.google);
  r.style.setProperty('--bubble-radius',(state.ui.bubbleRadius||20)+'px');
  r.style.setProperty('--chat-gap',(state.ui.chatGap||10)+'px');
- r.dataset.dark=state.ui.dark?'true':'false';r.dataset.density=state.ui.density||'normal';
+ r.dataset.dark=state.ui.dark?'true':'false';r.dataset.density=state.ui.density||'normal';r.dataset.visualStyle=state.ui.visualStyle==='liquid'?'liquid':'material';
  applyTheme(state.theme);
 }
 function avatar(src,name,cls='avatar'){return src?`<img class="${cls} image-avatar" src="${esc(src)}" alt="" loading="lazy" decoding="async">`:`<div class="${cls}">${esc((name||'?').trim().slice(0,1).toUpperCase())}</div>`}
@@ -88,7 +88,7 @@ async function openChat(id){
   persistChatDraft(previousChatId,$('#messageInput').value).catch(()=>{});
  }
  $('#messageInput').value='';
- state.active=c;state.replyTo=null;state.messageHasMore=false;state.pins=[];
+ state.active=c;state.replyTo=null;state.messageHasMore=false;state.pins=[];state.selectedMessageIds.clear();state.selectionMode=false;updateBulkToolbar();
  const sendAsChannelControl=$('#sendAsChannelControl');
  if(sendAsChannelControl){const canPostAsChannel=c.type==='channel'&&['owner','admin'].includes(c.my_role);sendAsChannelControl.classList.toggle('hidden',!canPostAsChannel);$('#sendAsChannel').checked=false}
  $('#replyBar').classList.add('hidden');$('#pinnedMessageBanner').classList.add('hidden');
@@ -269,6 +269,7 @@ function addMessage(m,{prepend=false}={}){
   '<button data-copy title="Копировать" aria-label="Копировать">'+m3Icon('content_copy')+'</button>'+
   '<button data-message-link title="Скопировать ссылку" aria-label="Скопировать ссылку">'+m3Icon('link')+'</button>'+
   '<button data-reply title="Ответить" aria-label="Ответить">'+m3Icon('reply')+'</button>'+
+  '<button data-select-message title="Выбрать сообщение" aria-label="Выбрать сообщение">'+m3Icon('check_box_outline_blank')+'</button>'+
   '<button data-save title="В Избранное" aria-label="В Избранное">'+m3Icon('bookmark_add')+'</button>'+
   '<button data-hide-me title="Удалить у меня" aria-label="Удалить у меня">'+m3Icon('visibility_off')+'</button>'+
   '<button data-forward title="Переслать" aria-label="Переслать">'+m3Icon('forward')+'</button>'+
@@ -277,17 +278,22 @@ function addMessage(m,{prepend=false}={}){
   '<button data-react-open title="Реакция" aria-label="Реакция">'+m3Icon('add_reaction')+'</button>'+
   (mine?'<button data-edit title="Изменить" aria-label="Изменить">'+m3Icon('edit')+'</button><button data-delete title="Удалить" aria-label="Удалить">'+m3Icon('delete')+'</button>':'')+
   '</span></div><div class="reactions">'+react+'</div></div>';
+ const selectButton=el.querySelector('[data-select-message]');
+ selectButton.onclick=()=>toggleMessageSelection(m.id);
  const quoteButton=el.querySelector('[data-quote-selection]');
  el.addEventListener('mouseup',()=>{
   const selection=window.getSelection(),selected=selection?.toString().trim();
   if(selected&&el.contains(selection.anchorNode)){el.dataset.selectedQuote=selected;quoteButton.hidden=false}
  });
  quoteButton.onclick=()=>{
-  const quote=el.dataset.selectedQuote||'';
-  if(!quote)return;
-  const input=$('#messageInput'),prefix='> '+quote.split('\n').join('\n> ')+'\n\n';
+  const raw=el.dataset.selectedQuote||'';
+  if(!raw)return;
+  const input=$('#messageInput'),available=Math.max(0,3900-input.value.length-10),quote=raw.slice(0,Math.min(1500,available));
+  if(!quote){toast('В сообщении уже нет места для цитаты');return}
+  const prefix='> '+quote.split('\n').join('\n> ')+'\n\n';
   input.value=(input.value?input.value+'\n':'')+prefix;
-  input.dispatchEvent(new Event('input',{bubbles:true}));input.focus();quoteButton.hidden=true;
+  input.dispatchEvent(new Event('input',{bubbles:true}));input.focus();input.setSelectionRange(input.value.length,input.value.length);quoteButton.hidden=true;
+  if(quote.length<raw.length)toast('Цитата сокращена, чтобы поместиться в сообщение');
  };
  el.querySelector('[data-copy]').onclick=async()=>{try{await navigator.clipboard.writeText(m.body||'Изображение');toast('Скопировано')}catch{toast('Браузер запретил копирование')}};
  el.querySelector('[data-message-link]').onclick=()=>copyMessageLink(m);
@@ -316,8 +322,22 @@ function addMessage(m,{prepend=false}={}){
   messagesBox.append(el);messagesBox.scrollTop=messagesBox.scrollHeight;
  }
  el.dataset.dayKey=dayKey;
+ updateBulkToolbar();
 }
-function setReply(m){state.replyTo=m.id;$('#replyBar').innerHTML=`<span>Ответ на <b>@${esc(m.username)}</b>: ${esc(m.body.slice(0,90))}</span><button id="cancelReply">×</button>`;$('#replyBar').classList.remove('hidden');$('#cancelReply').onclick=()=>{state.replyTo=null;$('#replyBar').classList.add('hidden')};$('#messageInput').focus()}
+function toggleMessageSelection(messageId){
+ const id=Number(messageId);
+ if(state.selectedMessageIds.has(id))state.selectedMessageIds.delete(id);else{if(state.selectedMessageIds.size>=100){toast('За раз можно выбрать максимум 100 сообщений');return}state.selectedMessageIds.add(id)}
+ state.selectionMode=state.selectedMessageIds.size>0;updateBulkToolbar();
+}
+function updateBulkToolbar(){
+ const bar=$('#bulkMessageToolbar'),box=$('#messages');if(!bar||!box)return;
+ box.dataset.selectionMode=state.selectionMode?'true':'false';
+ box.querySelectorAll('.message').forEach(el=>{const id=Number(el.dataset.messageId),selected=state.selectedMessageIds.has(id);el.classList.toggle('is-selected',selected);const button=el.querySelector('[data-select-message]');if(button){button.innerHTML=m3Icon(selected?'check_box':'check_box_outline_blank');button.setAttribute('aria-pressed',String(selected));button.title=selected?'Убрать из выбранных':'Выбрать сообщение'}});
+ const count=state.selectedMessageIds.size;bar.classList.toggle('hidden',!count);const label=$('#bulkMessageCount');if(label)label.textContent=count+' выбрано';const remove=$('#bulkDeleteMessages');if(remove)remove.disabled=!count;
+}
+function clearMessageSelection(){state.selectedMessageIds.clear();state.selectionMode=false;updateBulkToolbar()}
+async function bulkDeleteSelected(){if(!state.active||!state.selectedMessageIds.size)return;const ids=[...state.selectedMessageIds];if(!confirm('Удалить выбранные сообщения ('+ids.length+')? Удаление необратимо.'))return;try{const result=await api('/api/chats/'+state.active.id+'/messages/bulk-delete',{method:'POST',body:JSON.stringify({ids})});clearMessageSelection();toast('Удалено сообщений: '+result.deleted.length)}catch(error){toast(error.message)}}
+function setReply(m){state.replyTo=m.id;const sender=m.display_name||m.username||'сообщение';$('#replyBar').innerHTML=`<span><b>Ответ на ${esc(sender)}</b><span class="reply-bar-text">${esc((m.body||'Вложение').slice(0,160))}</span></span><button id="cancelReply" type="button" aria-label="Отменить ответ">×</button>`;$('#replyBar').classList.remove('hidden');$('#cancelReply').onclick=()=>{state.replyTo=null;$('#replyBar').classList.add('hidden')};$('#messageInput').focus()}
 async function editMessage(m){const text=prompt('Изменить сообщение:',m.body);if(text===null||!text.trim())return;try{await api('/api/messages/'+m.id,{method:'PATCH',body:JSON.stringify({body:text})})}catch(e){toast(e.message)}}
 async function deleteMessage(m){if(!confirm('Удалить сообщение?'))return;try{await api('/api/messages/'+m.id,{method:'DELETE'})}catch(e){toast(e.message)}}
 async function openMessageReaders(messageId){
@@ -485,7 +505,13 @@ function uploadFile(file,kind){
    xhr.onload=()=>{let data={};try{data=JSON.parse(xhr.responseText||'{}')}catch{}if(xhr.status>=200&&xhr.status<300)resolve(data);else reject(Error(data.error||('Ошибка загрузки '+xhr.status)))};
    xhr.onerror=()=>reject(Error('Сетевая ошибка при загрузке файла'));
    xhr.onabort=()=>reject(Error('Загрузка отменена'));
-   xhr.send(JSON.stringify({kind,data:reader.result}));
+   let dataUrl=String(reader.result||'');
+   if(kind==='audio'){
+    const ext=String(file.name||'').split('.').pop().toLowerCase();
+    const audioMime=({m4a:'audio/mp4',mp4:'audio/mp4',wav:'audio/wav',mp3:'audio/mpeg',ogg:'audio/ogg',aac:'audio/aac',flac:'audio/flac',weba:'audio/webm'})[ext];
+    if(audioMime)dataUrl=dataUrl.replace(/^data:[^;]+/,`data:${audioMime}`);
+   }
+   xhr.send(JSON.stringify({kind,data:dataUrl}));
   };
   reader.onerror=()=>reject(Error('Не удалось прочитать файл'));
   reader.readAsDataURL(file);
@@ -747,7 +773,7 @@ function settings(){
  const fonts={google:'Roboto Flex · M3 Expressive',roboto:'Roboto',inter:'Inter',system:'Системный'};
  const wallpaperOptions=[['expressive','Expressive'],['shapes','Мягкие формы'],['m3forms','Капсулы'],['waves','Дуги'],['dots','Точки'],['plain','Чистый фон']];
  const m=modal('Настройки','Настрой свой vovchikGram',`
- <div class="settings-section"><h3>Оформление</h3><span class="muted">Палитра Material You</span><div class="palette">${Object.entries(themes).map(([k,v])=>`<button class="palette-item ${state.theme===k?'selected':''}" data-theme="${k}" style="--swatch:${v.primary}" title="${k}"><i></i><span>${({blue:'Ocean',green:'Forest',purple:'Lavender',rose:'Rose',orange:'Sand',mono:'Mono'})[k]}</span></button>`).join('')}</div>
+ <div class="settings-section"><h3>Оформление</h3><label class="field"><span>Стиль интерфейса</span><select id="visualStyle"><option value="material" ${(state.ui.visualStyle||"material")==="material"?"selected":""}>Material 3 Expressive</option><option value="liquid" ${state.ui.visualStyle==="liquid"?"selected":""}>Liquid Glass · Жидкое стекло</option></select></label><span class="muted">Палитра Material You</span><div class="palette">${Object.entries(themes).map(([k,v])=>`<button class="palette-item ${state.theme===k?'selected':''}" data-theme="${k}" style="--swatch:${v.primary}" title="${k}"><i></i><span>${({blue:'Ocean',green:'Forest',purple:'Lavender',rose:'Rose',orange:'Sand',mono:'Mono'})[k]}</span></button>`).join('')}</div>
  <label class="field"><span>Размер шрифта <b id="fontLabel">${Math.round((state.ui.fontScale||1)*100)}%</b></span><input id="fontSize" type="range" min="85" max="145" value="${Math.round((state.ui.fontScale||1)*100)}"></label>
  <label class="field"><span>Шрифт интерфейса</span><select id="fontFamily">${Object.entries(fonts).map(([k,v])=>`<option value="${k}" ${(state.ui.fontFamily||'google')===k?'selected':''}>${v}</option>`).join('')}</select></label>
  <label class="field"><span>Скругление сообщений <b id="radiusLabel">${state.ui.bubbleRadius||20}px</b></span><input id="bubbleRadius" type="range" min="8" max="32" value="${state.ui.bubbleRadius||20}"></label>
@@ -776,6 +802,7 @@ function settings(){
  const saveUI=()=>localStorage.setItem('vg_ui',JSON.stringify(state.ui));
  const bindRange=(id,key,label,suffix,mult=1)=>$('#'+id).oninput=e=>{state.ui[key]=Number(e.target.value)*mult;$('#'+label).textContent=e.target.value+suffix;applyUI();saveUI()};
  bindRange('fontSize','fontScale','fontLabel','%',.01);bindRange('bubbleRadius','bubbleRadius','radiusLabel','px');bindRange('chatGap','chatGap','gapLabel','px');
+ $('#visualStyle').onchange=e=>{state.ui.visualStyle=e.target.value;applyUI();saveUI();toast(e.target.value==='liquid'?'Liquid Glass включён':'Material 3 включён')};
  $('#fontFamily').onchange=e=>{state.ui.fontFamily=e.target.value;applyUI();saveUI()};
  $('#density').onchange=e=>{state.ui.density=e.target.value;applyUI();saveUI()};
  $('#darkMode').onchange=e=>{state.ui.dark=e.target.checked;applyUI();saveUI();$('#drawerThemeState').textContent=state.ui.dark?'Вкл.':'Выкл.'};
@@ -970,7 +997,7 @@ function initSocket(){
   loadChats();
  });
  state.socket.on('message-updated',m=>{if(state.active?.id===m.chat_id)addMessage(m)});
- state.socket.on('message-deleted',d=>$('#msg-'+d.id)?.remove());
+ state.socket.on('message-deleted',d=>{state.selectedMessageIds.delete(Number(d.id));$('#msg-'+d.id)?.remove();if(!state.selectedMessageIds.size)state.selectionMode=false;updateBulkToolbar()});
  state.socket.on('chat-read',d=>{
   if(state.active?.id!==d.chatId)return;
   document.querySelectorAll('#messages>.message.mine').forEach(el=>{
@@ -1037,6 +1064,7 @@ function closeSpaceMenu(){const menu=$('#newChatMenuItems');if(menu)menu.classLi
 $('#newChatMenuItems').querySelectorAll('[data-create-space]').forEach(b=>b.onclick=()=>{const kind=b.dataset.createSpace;closeSpaceMenu();createChat(kind)});
 document.addEventListener('click',e=>{if(!e.target.closest('.m3-split-button'))closeSpaceMenu()});
 $('#loadMoreMessages').onclick=loadOlderMessages;
+ $('#bulkMessageToolbar').addEventListener('click',e=>{const action=e.target.closest('[data-bulk-action]')?.dataset.bulkAction;if(action==='delete')bulkDeleteSelected();else if(action==='clear')clearMessageSelection();else if(action==='all'){const ids=[...document.querySelectorAll('#messages .message')].map(el=>Number(el.dataset.messageId)).filter(Boolean);for(const id of ids.slice(0,100))state.selectedMessageIds.add(id);state.selectionMode=state.selectedMessageIds.size>0;updateBulkToolbar()}});
 $('#scheduleMessage').onclick=openScheduleDialog;
 $('#welcomeCreate').onclick=createChat;$('#settingsBtn').onclick=settings;$('#drawerProfile').onclick=()=>state.user?profileSide():showAuth();$('#profileBtn').onclick=()=>state.user?profileSide():showAuth();$('#accountBtn').onclick=()=>state.user?settings():showAuth();$('#menuPlayer').onclick=openMedia;$('#playerBtn').onclick=()=>$('#playerDock').classList.toggle('hidden');$('#closePlayer').onclick=()=>$('#playerDock').classList.add('hidden');$('#emojiBtn').onclick=openEmoji;$('#attachBtn').onclick=()=>$('#messageFilePicker').click();
 $('#chatFab').onclick=e=>{e.stopPropagation();const menu=$('#chatFabMenu'),open=menu.classList.contains('hidden');menu.classList.toggle('hidden',!open);$('#chatFab').setAttribute('aria-expanded',String(open));};
