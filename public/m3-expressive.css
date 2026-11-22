@@ -537,3 +537,74 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .m3-fab-menu button:hover{background:var(--surface3);transform:translateX(-3px)}
 @keyframes m3-fab-item-in{from{opacity:0;transform:translateY(9px) scale(.94)}to{opacity:1;transform:none}}
 @media(max-width:560px){.m3-fab-stack{right:13px;bottom:82px}.m3-fab{width:52px;height:52px}}
+
+
+/* v2.0: compact Material 3 Expressive player progress.
+   The large decorative header wave has been removed; this single seek track is the only player wave. */
+.media-art{display:none!important}
+.media-editor{gap:12px!important;padding:18px 20px!important}
+.media-timeline{padding:0!important;margin-top:8px}
+.media-waveform{
+ --seek-progress:0%;height:28px!important;min-height:28px;display:flex;align-items:center;
+ padding:0!important;border:0!important;border-radius:0!important;overflow:hidden;
+ background:transparent!important;box-shadow:none!important;
+}
+.media-waveform svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.media-wave-base,.media-wave-active,.media-wave-flow{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.media-wave-base{stroke:color-mix(in srgb,var(--outline) 74%,var(--surface3));stroke-width:6;opacity:.95}
+.media-wave-active{stroke:var(--primary);stroke-width:6;clip-path:inset(0 calc(100% - var(--seek-progress)) 0 0);filter:none;transition:clip-path .08s linear}
+.media-wave-flow{stroke:color-mix(in srgb,var(--primary) 55%,white);stroke-width:1.5;opacity:0;stroke-dasharray:5 9;stroke-dashoffset:0;clip-path:inset(0 calc(100% - var(--seek-progress)) 0 0)}
+.media-waveform.is-playing .media-wave-flow{opacity:.68;animation:m3-wave-flow 1.25s linear infinite}
+.media-waveform.is-playing .media-wave-active{animation:none;filter:none}
+.media-wave-playhead{
+ position:absolute;z-index:2;left:var(--seek-progress);top:50%;width:10px;height:10px;
+ border-radius:50%;background:var(--surface);border:3px solid var(--primary);
+ box-shadow:0 1px 4px #0003;transform:translate(-50%,-50%);pointer-events:none;
+ transition:left .08s linear;
+}
+.media-waveform.is-playing .media-wave-playhead{animation:none}
+.media-wave-range{top:0!important;height:28px!important;padding:0!important;opacity:1!important}
+.media-wave-range::-webkit-slider-runnable-track{height:28px!important;background:transparent!important}
+.media-wave-range::-moz-range-track{height:28px!important;background:transparent!important}
+.media-wave-range::-webkit-slider-thumb{width:14px;height:14px;margin-top:7px;border:0;background:transparent;box-shadow:none;opacity:.01}
+.media-wave-range::-moz-range-thumb{width:14px;height:14px;border:0;background:transparent;box-shadow:none;opacity:.01}
+.media-timecodes{margin-top:7px;font-size:11px;font-weight:500;letter-spacing:0}
+.media-controls{margin-top:2px}
+.media-panel.is-playing .media-art .media-snake{animation:none!important}
+
+/* 2.0 chat history, pin and presence controls */
+.m3-load-older{
+ align-self:center;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+ min-height:34px;margin:7px auto;padding:6px 14px;border-radius:var(--m3-shape-full);
+ color:var(--text);background:var(--surface2);border:1px solid color-mix(in srgb,var(--outline) 60%,transparent);
+ font-size:11px;font-weight:600;box-shadow:var(--m3-shadow-1);
+}
+.m3-load-older:hover{background:var(--surface3)}
+.m3-load-older .material-symbols-rounded{font-size:17px;margin:0}
+.m3-pinned-banner{
+ display:flex;align-items:center;gap:10px;min-width:0;padding:8px 14px;margin:6px 18px 0;
+ border-radius:15px;background:color-mix(in srgb,var(--primary) 10%,var(--surface2));
+ border:1px solid color-mix(in srgb,var(--primary) 23%,var(--outline));cursor:pointer;
+}
+.m3-pinned-banner .material-symbols-rounded{color:var(--primary);font-size:19px;flex:none}
+.m3-pinned-banner .pin-copy{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.m3-pinned-banner b,.m3-pinned-banner small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m3-pinned-banner b{font-size:11px}
+.m3-pinned-banner small{color:var(--muted);font-size:10px}
+.message-read{display:inline-flex;align-items:center;color:var(--primary);margin-left:2px}
+.message-read .material-symbols-rounded{font-size:14px;margin:0}
+.message-actions button[data-pinned="true"]{background:color-mix(in srgb,var(--primary) 18%,var(--surface3));color:var(--primary)}
+.chat-unread-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:var(--m3-shape-full);background:var(--primary);color:#fff;font-size:10px;font-weight:700}
+.chat-presence-dot{display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:#39b86a;vertical-align:middle;box-shadow:0 0 0 3px color-mix(in srgb,#39b86a 16%,transparent)}
+.chat-typing-status{color:var(--primary)!important;font-size:10px!important;min-height:12px}
+.m3-saved-list{display:flex;flex-direction:column;gap:8px;max-height:min(60vh,540px);overflow:auto}
+.m3-saved-item{display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:16px;background:var(--surface2);text-align:left}
+.m3-saved-item>span:last-child{min-width:0;flex:1}
+.m3-saved-item b,.m3-saved-item small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m3-saved-item small{color:var(--muted);font-size:10px;margin-top:3px}
+@media(max-width:600px){
+ .media-editor{padding:14px!important}
+ .m3-pinned-banner{margin-inline:8px}
+ .media-waveform,.media-wave-range{height:26px!important}
+ .media-wave-range::-webkit-slider-runnable-track,.media-wave-range::-moz-range-track{height:26px!important}
+}
