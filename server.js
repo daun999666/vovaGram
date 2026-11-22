@@ -398,7 +398,20 @@ app.get("/api/search/messages",auth,(req,res)=>{
   const chatId=Number(req.query.chatId)||0;
   const before=boundedInteger(req.query.before,0,0,Number.MAX_SAFE_INTEGER);
   const limit=boundedInteger(req.query.limit,20,1,50);
-  const escaped=term.replace(/[\\%_]/g,"\\app.get("/api/search",auth,(req,res)=>{");
+  const pattern="%"+term+"%";
+  const messages=q(`SELECT m.id,m.chat_id,m.body,m.created_at,m.reply_to,
+      u.username,u.display_name,u.avatar,c.title AS chat_title,c.type AS chat_type
+    FROM messages m
+    JOIN members mine ON mine.chat_id=m.chat_id AND mine.user_id=?
+    JOIN users u ON u.id=m.user_id
+    JOIN chats c ON c.id=m.chat_id
+    WHERE m.body LIKE ? COLLATE NOCASE
+      AND (?=0 OR m.chat_id=?)
+      AND (?=0 OR m.id<?)
+    ORDER BY m.id DESC LIMIT ?`).all(req.user.id,pattern,chatId,chatId,before,before,limit);
+  res.json({messages});
+});
+app.get("/api/search",auth,(req,res)=>{");
   const messages=q(`SELECT m.id,m.chat_id,m.body,m.created_at,m.reply_to,
       u.username,u.display_name,u.avatar,c.title AS chat_title,c.type AS chat_type
     FROM messages m
