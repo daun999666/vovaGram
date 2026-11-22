@@ -1,0 +1,21 @@
+# Local secrets — never commit these files
+.env
+.env.*
+!.env.example
+
+# Runtime data and user uploads
+data/
+uploads/
+
+# Node dependencies and generated builds
+node_modules/
+dist/
+build/
+release/
+*.log
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
