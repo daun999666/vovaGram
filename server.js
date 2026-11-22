@@ -40,6 +40,13 @@ fs.mkdirSync(uploadDir, { recursive: true });
 const db = new Database(path.join(dataDir, "vovchikgram.sqlite"));
 db.pragma("journal_mode = WAL");
 db.exec(`
+CREATE TABLE IF NOT EXISTS auth_sessions (
+ id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, user_agent TEXT DEFAULT '',
+ ip_hint TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+ expires_at TEXT NOT NULL, revoked_at TEXT DEFAULT '',
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id,created_at DESC);
 CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT UNIQUE NOT NULL,
  username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
@@ -126,7 +133,13 @@ ensureColumn("chat_preferences","pinned","INTEGER DEFAULT 0");
 
 const q = (sql) => db.prepare(sql);
 const getUser = q("SELECT id,number,username,display_name,bio,avatar,profile_bg,theme,role,banned,created_at FROM users WHERE id=?");
-const tokenFor = (u) => jwt.sign({ id: u.id }, SECRET, { expiresIn: "30d" });
+const tokenFor = (u, req) => {
+  const id = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 30*24*60*60*1000).toISOString();
+  q("INSERT INTO auth_sessions(id,user_id,user_agent,ip_hint,expires_at) VALUES(?,?,?,?,?)")
+    .run(id,u.id,String(req?.headers?.["user-agent"]||"").slice(0,240),String(req?.ip||"").slice(0,80),expiresAt);
+  return jwt.sign({ id:u.id, sid:id }, SECRET, { expiresIn:"30d" });
+};
 function publicUser(u) {
   if (!u) return null;
   return { id:u.id, number:u.number, username:u.username, displayName:u.display_name,
@@ -137,7 +150,9 @@ function auth(req,res,next) {
     const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
     const payload = jwt.verify(token, SECRET);
     const user = getUser.get(payload.id);
-    if (!user || user.banned) return res.status(401).json({error:"Аккаунт недоступен"});
+    const session = payload.sid && q("SELECT id FROM auth_sessions WHERE id=? AND user_id=? AND revoked_at='' AND expires_at>?").get(payload.sid,user?.id||0,new Date().toISOString());
+    if (!user || user.banned || !session) return res.status(401).json({error:"Сессия завершена. Войдите снова."});
+    req.sessionId = payload.sid;
     req.user = user; next();
   } catch { res.status(401).json({error:"Войдите в аккаунт"}); }
 }
@@ -200,7 +215,7 @@ app.post("/api/register", (req,res)=>{
     const info = q("INSERT INTO users(number,username,password_hash,display_name) VALUES(?,?,?,?)")
       .run(number,username,bcrypt.hashSync(password,10),displayName || username);
     const u = getUser.get(info.lastInsertRowid);
-    return res.json({token:tokenFor(u), user:publicUser(u)});
+    return res.json({token:tokenFor(u,req), user:publicUser(u)});
   } catch { return res.status(500).json({error:"Не удалось создать аккаунт"}); }
 });
 app.post("/api/login",(req,res)=>{
@@ -208,7 +223,24 @@ app.post("/api/login",(req,res)=>{
   const u = q("SELECT * FROM users WHERE username=? OR id IN (SELECT user_id FROM user_names WHERE username=?) LIMIT 1").get(username,username);
   if (!u || !bcrypt.compareSync(password,u.password_hash)) return res.status(401).json({error:"Неверный юзернейм или пароль"});
   if (u.banned) return res.status(403).json({error:"Аккаунт заблокирован"});
-  res.json({token:tokenFor(u),user:publicUser(u)});
+  res.json({token:tokenFor(u,req),user:publicUser(u)});
+});
+app.get("/api/sessions",auth,(req,res)=>{
+  const sessions=q("SELECT id,user_agent,ip_hint,created_at,expires_at,revoked_at FROM auth_sessions WHERE user_id=? AND revoked_at='' AND expires_at>? ORDER BY created_at DESC").all(req.user.id,new Date().toISOString());
+  res.json({sessions:sessions.map(s=>({...s,current:s.id===req.sessionId}))});
+});
+app.delete("/api/sessions/:id",auth,(req,res)=>{
+  const id=String(req.params.id||"");
+  const result=q("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND revoked_at=''").run(id,req.user.id);
+  if(!result.changes)return res.status(404).json({error:"Сессия не найдена или уже завершена"});
+  for(const socket of io.sockets.sockets.values())if(socket.sessionId===id)socket.disconnect(true);
+  res.json({ok:true});
+});
+app.post("/api/sessions/revoke-others",auth,(req,res)=>{
+  const rows=q("SELECT id FROM auth_sessions WHERE user_id=? AND revoked_at='' AND id<>?").all(req.user.id,req.sessionId);
+  const update=q("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at='' AND id<>?").run(req.user.id,req.sessionId);
+  for(const socket of io.sockets.sockets.values())if(socket.user.id===req.user.id&&socket.sessionId!==req.sessionId)socket.disconnect(true);
+  res.json({ok:true,revoked:update.changes});
 });
 app.get("/api/me",auth,(req,res)=>res.json({
   user:publicUser(req.user),
@@ -940,8 +972,9 @@ io.use((socket,next)=>{
   try {
     const payload=jwt.verify(socket.handshake.auth?.token,SECRET);
     const u=getUser.get(payload.id);
-    if(!u || u.banned) return next(new Error("unauthorized"));
-    socket.user=u; next();
+    const session=payload.sid&&q("SELECT id FROM auth_sessions WHERE id=? AND user_id=? AND revoked_at='' AND expires_at>?").get(payload.sid,u?.id||0,new Date().toISOString());
+    if(!u || u.banned || !session) return next(new Error("unauthorized"));
+    socket.user=u; socket.sessionId=payload.sid; next();
   } catch { next(new Error("unauthorized")); }
 });
 io.on("connection",(socket)=>{
