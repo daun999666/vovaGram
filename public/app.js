@@ -828,7 +828,7 @@ function formatTime(value){if(!Number.isFinite(value)||value<0)return '00:00';co
 function updatePlayerLabels(){
  const a=$('#audioPlayer'),song=state.currentSong,playing=!a.paused&&!!a.src;
  $('#mediaTrackTitle').textContent=song?.title||'Выбери композицию';
- $('#mediaTrackSubtitle').textContent=song?'Личная коллекция':'Персональный плеер vovchikGram';
+ $('#mediaTrackSubtitle').textContent=a.error?'Файл недоступен или формат не поддерживается':song?'Личная коллекция':'Персональный плеер vovchikGram';
  const speed=$('#mediaSpeedValue');if(speed)speed.textContent=Number(a.playbackRate||1)+'×';
  $('#trackName').textContent=song?.title||'Нет трека';
  $('#mediaCurrent').textContent=formatTime(a.currentTime);
@@ -869,7 +869,7 @@ function playSong(song){
  saveSongPosition();state.currentSong=song;lastPositionBucket=-1;
  $('#playerDock').classList.remove('hidden');
  const audio=$('#audioPlayer');audio.src=song.file_url;
- const restore=()=>{const position=Number(readSongPositions()[song.id])||0;if(position>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(position,Math.max(0,audio.duration-0.25));audio.play().catch(()=>{});audio.removeEventListener('loadedmetadata',restore)};
+ const restore=()=>{audio.removeEventListener('loadedmetadata',restore);if(state.currentSong?.id!==song.id)return;const position=Number(readSongPositions()[song.id])||0;if(position>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(position,Math.max(0,audio.duration-0.25));audio.play().catch(()=>{})};
  audio.addEventListener('loadedmetadata',restore);
  updatePlayerLabels();loadSongs();
 }
