@@ -749,8 +749,11 @@ function updatePlayerLabels(){
  $('#mediaPlayPause').title=playing?'Пауза':'Воспроизвести';
  $('#mediaPanel').classList.toggle('is-playing',playing);
  $('#playerDock').classList.toggle('is-playing',playing);
- const progress=a.duration?Math.min(100,Math.max(0,a.currentTime/a.duration*100)):0;
- $('#mediaSeek').value=Math.round(progress*10);
+ const progress=Number.isFinite(a.duration)&&a.duration>0?Math.min(100,Math.max(0,a.currentTime/a.duration*100)):0;
+ const seek=$('#mediaSeek');
+ seek.value=Math.round(progress*10);
+ seek.style.setProperty('--seek-progress',progress+'%');
+ seek.setAttribute('aria-valuenow',String(Math.round(progress*10)));
  const nativeProgress=$('#mediaWaveform');
  if(nativeProgress){nativeProgress.value=progress;nativeProgress.setAttribute('aria-valuenow',String(Math.round(progress)))}
 }
