@@ -89,6 +89,7 @@ BEGIN
   DELETE FROM chat_reads WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id;
   DELETE FROM chat_drafts WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id;
   DELETE FROM chat_preferences WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id;
+  DELETE FROM chat_invites WHERE chat_id=OLD.chat_id AND created_by=OLD.user_id;
   DELETE FROM hidden_messages
     WHERE user_id=OLD.user_id
       AND message_id IN (SELECT id FROM messages WHERE chat_id=OLD.chat_id);
@@ -100,6 +101,7 @@ BEGIN
   DELETE FROM chat_pins WHERE chat_id=OLD.id;
   DELETE FROM chat_drafts WHERE chat_id=OLD.id;
   DELETE FROM chat_preferences WHERE chat_id=OLD.id;
+  DELETE FROM chat_invites WHERE chat_id=OLD.id;
 END;
 `);
 function ensureColumn(table, column, definition) {
@@ -439,6 +441,8 @@ app.post("/api/invites/:token/join",auth,(req,res)=>{
   if(invite.max_uses&&invite.uses>=invite.max_uses) return res.status(410).json({error:"Лимит использований приглашения исчерпан"});
   const chat=q("SELECT id,title,type FROM chats WHERE id=?").get(invite.chat_id);
   if(!chat) return res.status(404).json({error:"Пространство больше не существует"});
+  if(q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(chat.id,req.user.id))
+    return res.json({ok:true,chat,alreadyMember:true});
   const join=db.transaction(()=>{
     q("INSERT OR IGNORE INTO members(chat_id,user_id,role) VALUES(?,?,'member')").run(chat.id,req.user.id);
     q("UPDATE chat_invites SET uses=uses+1 WHERE token=?").run(token);
