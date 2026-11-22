@@ -464,6 +464,17 @@ function addMessageFiles(files){
  }
  renderAttachmentPreview();
 }
+async function exportChatHistory(chatId){
+ try{
+  const data=await api('/api/chats/'+chatId+'/export');
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='vovchikGram-chat-'+chatId+'.json';
+  document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast('История чата экспортирована');
+ }catch(e){toast(e.message)}
+}
 async function openScheduledMessages(){
  if(!state.active)return;
  const chatId=state.active.id;
@@ -568,7 +579,8 @@ async function chatDetails(c){
   '<button class="soft-btn" id="toggleChatPin"><span class="material-symbols-rounded">'+(Number(c.is_pinned)?'keep_off':'push_pin')+'</span>'+(Number(c.is_pinned)?'Открепить чат':'Закрепить чат')+'</button>'+
   '<button class="soft-btn" id="toggleChatArchive"><span class="material-symbols-rounded">'+(Number(c.is_archived)?'unarchive':'archive')+'</span>'+(Number(c.is_archived)?'Вернуть из архива':'Переместить в архив')+'</button>'+
   '<button class="soft-btn" id="toggleChatMute"><span class="material-symbols-rounded">'+(Number(c.is_muted)?'notifications':'notifications_off')+'</span>'+(Number(c.is_muted)?'Включить уведомления':'Отключить уведомления')+'</button>'+
-  '<button class="soft-btn" id="openScheduledMessages"><span class="material-symbols-rounded">schedule</span>Отложенные сообщения</button></div>';
+  '<button class="soft-btn" id="openScheduledMessages"><span class="material-symbols-rounded">schedule</span>Отложенные сообщения</button>'+
+  '<button class="soft-btn" id="exportChatHistory"><span class="material-symbols-rounded">download</span>Экспортировать историю</button></div>';
  const dialog=modal('Информация о чате','Параметры пространства',formHtml+memberPanel+preferenceHtml,actions);
  const updatePreference=async(field,value)=>{
   try{
@@ -585,6 +597,7 @@ async function chatDetails(c){
  $('#toggleChatArchive').onclick=()=>updatePreference('archived',!Number(c.is_archived));
  $('#toggleChatMute').onclick=()=>updatePreference('muted',!Number(c.is_muted));
  $('#openScheduledMessages').onclick=openScheduledMessages;
+ $('#exportChatHistory').onclick=()=>exportChatHistory(c.id);
  dialog.querySelectorAll('[data-member-role]').forEach(button=>button.onclick=async()=>{
   try{
    await api('/api/chats/'+c.id+'/members/'+button.dataset.memberRole,{method:'PATCH',body:JSON.stringify({role:button.dataset.nextRole})});
