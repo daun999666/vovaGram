@@ -795,3 +795,11 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .chat-mute-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .chat-mute-row select{flex:1;min-width:150px;min-height:40px;padding:0 12px;border:1px solid var(--outline-variant);border-radius:14px;background:var(--surface-container);color:var(--on-surface);font:inherit}
 .chat-mute-control>small{font-size:11px;color:var(--muted)}
+
+.m3-join-request{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--outline-variant)}
+.m3-join-request>span:first-child{display:flex;align-items:center;gap:10px;min-width:0}
+.m3-join-request>span:first-child>span:last-child{display:grid;gap:3px;min-width:0}
+.m3-join-request small{font-size:11px;color:var(--muted)}
+.m3-join-actions{display:flex;gap:6px;flex:none}
+.m3-join-actions button{padding:8px 10px;font-size:12px}
+@media(max-width:520px){.m3-join-request{align-items:flex-start;flex-direction:column}.m3-join-actions{width:100%}.m3-join-actions button{flex:1}}
