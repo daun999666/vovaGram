@@ -11,9 +11,10 @@
 - Search across people, chats and message text, restricted to chats the signed-in user can access.
 - Message forwarding with source author/chat metadata.
 - Edit history: previous message text is retained and visible to chat members.
-- Real-time typing state and presence updates scoped to shared chats.
-- Per-chat server drafts.
-- Hide a message only for the current account, with a restore list; other participants continue to see it.
+- Real-time typing state and presence updates scoped to shared chats (presence has no last-seen timestamp yet).
+- Per-chat server drafts and per-account message hiding with a restore manager.
+- Account blocking, with mutual direct-message enforcement and a blocked-users manager.
+- Group member lists, owner/admin/member role controls, and expiring / limited-use invite links.
 - Material 3 Expressive wavy progress indicators using the upstream `material@3.16.0` web component.
 
 ## Build and verify
