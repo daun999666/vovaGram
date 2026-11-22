@@ -76,8 +76,9 @@ function setWallpaper(value){
 }
 async function openChat(id){
  const c=state.chats.find(x=>x.id===id);if(!c)return;
+ if(state.active?.id===id){$('#sidebar').classList.remove('open');return}
  const previousChatId=state.active?.id;
- if(previousChatId&&previousChatId!==id){
+ if(previousChatId){
   clearTimeout(state.draftTimer);
   persistChatDraft(previousChatId,$('#messageInput').value).catch(()=>{});
  }
