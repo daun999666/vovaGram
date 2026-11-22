@@ -752,6 +752,19 @@ app.get("/api/hidden-messages",auth,(req,res)=>{
     WHERE h.user_id=? ORDER BY h.hidden_at DESC LIMIT 200`).all(req.user.id,req.user.id);
   res.json({messages:rows});
 });
+app.get("/api/messages/:id/readers",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  const message=q("SELECT id,chat_id,user_id FROM messages WHERE id=?").get(id);
+  if(!message||!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(message.chat_id,req.user.id))
+    return res.status(404).json({error:"Сообщение не найдено"});
+  const readers=q(`SELECT u.id,u.username,u.display_name,u.avatar,cr.updated_at AS read_at
+    FROM chat_reads cr
+    JOIN users u ON u.id=cr.user_id
+    JOIN members m ON m.chat_id=cr.chat_id AND m.user_id=cr.user_id
+    WHERE cr.chat_id=? AND cr.user_id<>? AND cr.last_read_message_id>=?
+    ORDER BY cr.updated_at DESC`).all(message.chat_id,message.user_id,id);
+  res.json({readers});
+});
 app.get("/api/messages/:id/reactions",auth,(req,res)=>{
   const id=Number(req.params.id),message=q("SELECT chat_id,reactions FROM messages WHERE id=?").get(id);
   if(!message||!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(message.chat_id,req.user.id))
