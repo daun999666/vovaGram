@@ -483,6 +483,22 @@ app.delete("/api/chats/:id/draft",auth,(req,res)=>{
   q("DELETE FROM chat_drafts WHERE user_id=? AND chat_id=?").run(req.user.id,id);
   res.json({ok:true});
 });
+app.get("/api/chats/:id/export",auth,(req,res)=>{
+  const chatId=Number(req.params.id);
+  if(!Number.isSafeInteger(chatId)||chatId<1) return res.status(400).json({error:"Некорректный ID чата"});
+  const chat=q("SELECT id,title,description,type,created_at FROM chats WHERE id=?").get(chatId);
+  if(!chat||!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id))
+    return res.status(403).json({error:"Нет доступа"});
+  const messages=q(`SELECT m.id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+      m.forwarded_from_name,m.forwarded_from_chat_title,
+      u.username,u.display_name
+    FROM messages m JOIN users u ON u.id=m.user_id
+    WHERE m.chat_id=? AND NOT EXISTS(
+      SELECT 1 FROM hidden_messages hm WHERE hm.user_id=? AND hm.message_id=m.id
+    )
+    ORDER BY m.id ASC LIMIT 10000`).all(chatId,req.user.id);
+  res.json({exportedAt:new Date().toISOString(),chat,messages});
+});
 app.post("/api/chats/:id/read",auth,(req,res)=>{
   const id=Number(req.params.id);
   if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:"Некорректный ID чата"});
