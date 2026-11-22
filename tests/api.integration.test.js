@@ -271,6 +271,32 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(approvedJoinRequest.status, 200);
   const guestNowMember = await request(baseUrl, guestToken, `/api/chats/${chatId}/messages`);
   assert.equal(guestNowMember.status, 200);
+  const activeRoster = await request(baseUrl, ownerToken, `/api/chats/${chatId}/active-members`);
+  assert.equal(activeRoster.status, 200);
+  assert.equal(activeRoster.body.members.length, 3);
+  assert.ok(Number.isInteger(activeRoster.body.onlineCount));
+  const newMemberLimit = await request(baseUrl, ownerToken, `/api/chats/${chatId}`, {
+    method: "PATCH", body: JSON.stringify({ title: "v2 integration", description: "", avatar: "", wallpaper: "", slowModeSeconds: 0, newMemberRestrictionSeconds: 300 })
+  });
+  assert.equal(newMemberLimit.status, 200);
+  assert.equal(newMemberLimit.body.chat.new_member_restriction_seconds, 300);
+  const restrictedNewMemberMessage = await request(baseUrl, guestToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "too early after joining" })
+  });
+  assert.equal(restrictedNewMemberMessage.status, 429);
+  assert.ok(restrictedNewMemberMessage.body.retryAfter > 0);
+  const disableNewMemberLimit = await request(baseUrl, ownerToken, `/api/chats/${chatId}`, {
+    method: "PATCH", body: JSON.stringify({ title: "v2 integration", description: "", avatar: "", wallpaper: "", slowModeSeconds: 0, newMemberRestrictionSeconds: 0 })
+  });
+  assert.equal(disableNewMemberLimit.status, 200);
+  const chatEvents = await request(baseUrl, ownerToken, `/api/chats/${chatId}/events`);
+  assert.equal(chatEvents.status, 200);
+  assert.ok(chatEvents.body.events.some(event => event.event_type === "member_joined" && event.target_id === guest.body.user.id));
+  const settingsHistory = await request(baseUrl, ownerToken, `/api/chats/${chatId}/settings-history`);
+  assert.equal(settingsHistory.status, 200);
+  assert.ok(settingsHistory.body.history.length >= 2);
+  const memberCannotReadSettingsHistory = await request(baseUrl, guestToken, `/api/chats/${chatId}/settings-history`);
+  assert.equal(memberCannotReadSettingsHistory.status, 403);
   const slowModeEnabled = await request(baseUrl, ownerToken, `/api/chats/${chatId}`, {
     method: "PATCH", body: JSON.stringify({ title: "v2 integration", description: "", avatar: "", wallpaper: "", slowModeSeconds: 5 })
   });
@@ -295,6 +321,17 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(invalidSlowMode.status, 400);
   const handledJoinRequests = await request(baseUrl, ownerToken, `/api/chats/${chatId}/join-requests`);
   assert.equal(handledJoinRequests.body.requests.length, 0);
+  const bulkMuted = await request(baseUrl, ownerToken, `/api/chats/${chatId}/members/bulk`, {
+    method: "POST", body: JSON.stringify({ action: "mute", userIds: [guest.body.user.id] })
+  });
+  assert.equal(bulkMuted.status, 200);
+  assert.deepEqual(bulkMuted.body.changed, [guest.body.user.id]);
+  const mutedMemberMessage = await request(baseUrl, guestToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "blocked by temporary admin restriction" })
+  });
+  assert.equal(mutedMemberMessage.status, 403);
+  const bulkActionEvent = await request(baseUrl, ownerToken, `/api/chats/${chatId}/events`);
+  assert.ok(bulkActionEvent.body.events.some(event => event.event_type === "members_bulk_muted"));
 
   const inviteCreated = await request(baseUrl, ownerToken, `/api/chats/${chatId}/invites`, {
     method: "POST", body: JSON.stringify({ expiresInSeconds: 3600, maxUses: 1 })
