@@ -569,7 +569,7 @@ async function chatDetails(c){
     return '<div class="m3-member-row"><span>'+avatar(member.avatar,member.display_name,'result-avatar')+'<span><b>'+esc(member.display_name)+'</b><small>@'+esc(member.username)+' · '+roleLabel+'</small></span></span><span class="m3-member-actions">'+controls+'</span></div>';
    }).join('');
    memberPanel='<section class="m3-members-section"><h3>Участники · '+memberData.members.length+'</h3><div class="m3-member-list">'+memberRows+'</div>'+
-    (canManageMembers?'<button class="soft-btn" id="createChatInvite"><span class="material-symbols-rounded">link</span>Создать ссылку-приглашение</button>':'')+'</section>';
+    (canManageMembers?'<button class="soft-btn" id="createChatInvite"><span class="material-symbols-rounded">link</span>Создать ссылку-приглашение</button><button class="soft-btn" id="openJoinRequests"><span class="material-symbols-rounded">how_to_reg</span>Заявки на вступление</button>':'')+'</section>';
   }catch(error){memberPanel='<p class="muted">Не удалось загрузить список участников.</p>'}
  }
  const formHtml=`<div class="chat-info-head">${avatar(c.avatar,c.title,'public-avatar')}<div><b>${esc(c.title)}</b><small>${esc(c.description||'')}</small></div></div>${canEdit?`<label class="field"><span>Название</span><input id="chatName" value="${esc(c.title)}"></label><label class="field"><span>Описание</span><textarea id="chatDesc">${esc(c.description||'')}</textarea></label><label class="field"><span>Аватар чата</span><input id="chatAvatarFile" type="file" accept="image/*"></label><label class="field"><span>Обои</span><select id="chatWallpaper"><option value="shapes">Мягкие формы</option><option value="m3forms">Капсулы</option><option value="waves">Дуги</option><option value="dots">Точки</option><option value="plain">Без узора</option><option value="__custom">Своя картинка…</option></select></label><label class="field"><span>Свои обои</span><input id="chatWallpaperFile" type="file" accept="image/png,image/jpeg,image/webp"></label>`:''}<p class="muted">Тип: ${c.type==='channel'?'канал':c.type==='group'?'группа':'личный диалог'}</p>${canDelete?`<p class="muted">${deleteDescription}</p>`:''}`;
@@ -619,6 +619,25 @@ async function chatDetails(c){
    await api('/api/chats/'+c.id+'/members/'+button.dataset.removeMember,{method:'DELETE'});
    await loadChats();closeModal();chatDetails(state.chats.find(x=>x.id===c.id)||c);
   }catch(e){toast(e.message)}
+ });
+ $('#openJoinRequests')?.addEventListener('click',async()=>{
+  const renderRequests=async()=>{
+   try{
+    const result=await api('/api/chats/'+c.id+'/join-requests');
+    const rows=(result.requests||[]).map(request=>'<div class="m3-join-request"><span>'+avatar(request.avatar,request.display_name,'result-avatar')+'<span><b>'+esc(request.display_name)+'</b><small>@'+esc(request.username)+' · '+new Date(request.requested_at+'Z').toLocaleString('ru-RU')+'</small></span></span><span class="m3-join-actions"><button class="soft-btn" data-join-decision="approve" data-request-id="'+request.id+'">Принять</button><button class="danger" data-join-decision="reject" data-request-id="'+request.id+'">Отклонить</button></span></div>').join('');
+    const panel=modal('Заявки на вступление',c.title,rows||'<p class="muted">Новых заявок нет.</p>');
+    panel.querySelectorAll('[data-join-decision]').forEach(button=>button.onclick=async()=>{
+     button.disabled=true;
+     try{
+      await api('/api/chats/'+c.id+'/join-requests/'+button.dataset.requestId,{method:'PATCH',body:JSON.stringify({decision:button.dataset.joinDecision})});
+      toast(button.dataset.joinDecision==='approve'?'Участник добавлен':'Заявка отклонена');
+      await loadChats();
+      await renderRequests();
+     }catch(error){toast(error.message);button.disabled=false}
+    });
+   }catch(error){toast(error.message)}
+  };
+  await renderRequests();
  });
  $('#createChatInvite')?.addEventListener('click',async()=>{
   try{
