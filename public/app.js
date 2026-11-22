@@ -257,6 +257,7 @@ function addMessage(m,{prepend=false}={}){
   (mine?'<button type="button" class="message-read" data-readers title="'+(Number(m.read_by_count)>0?'Кто прочитал':'Отправлено')+'" aria-label="Кто прочитал">'+m3Icon(Number(m.read_by_count)>0?'done_all':'done')+'</button>':'')+
   forwardCount+'<span class="message-actions">'+
   '<button data-copy title="Копировать" aria-label="Копировать">'+m3Icon('content_copy')+'</button>'+
+  '<button data-message-link title="Скопировать ссылку" aria-label="Скопировать ссылку">'+m3Icon('link')+'</button>'+
   '<button data-reply title="Ответить" aria-label="Ответить">'+m3Icon('reply')+'</button>'+
   '<button data-save title="В Избранное" aria-label="В Избранное">'+m3Icon('bookmark_add')+'</button>'+
   '<button data-hide-me title="Удалить у меня" aria-label="Удалить у меня">'+m3Icon('visibility_off')+'</button>'+
@@ -267,6 +268,7 @@ function addMessage(m,{prepend=false}={}){
   (mine?'<button data-edit title="Изменить" aria-label="Изменить">'+m3Icon('edit')+'</button><button data-delete title="Удалить" aria-label="Удалить">'+m3Icon('delete')+'</button>':'')+
   '</span></div><div class="reactions">'+react+'</div></div>';
  el.querySelector('[data-copy]').onclick=async()=>{try{await navigator.clipboard.writeText(m.body||'Изображение');toast('Скопировано')}catch{toast('Браузер запретил копирование')}};
+ el.querySelector('[data-message-link]').onclick=()=>copyMessageLink(m);
  el.querySelector('[data-reply]').onclick=()=>setReply(m);
  el.querySelector('[data-save]').onclick=()=>saveMessage(m);
  el.querySelector('[data-readers]')?.addEventListener('click',()=>openMessageReaders(m.id));
@@ -350,6 +352,15 @@ async function openBlockedUsers(){
    }catch(e){toast(e.message)}
   });
  }catch(e){toast(e.message)}
+}
+async function copyMessageLink(message){
+ const url=new URL(location.href);
+ url.searchParams.set('chat',String(message.chat_id));
+ url.searchParams.set('message',String(message.id));
+ try{
+  await navigator.clipboard.writeText(url.toString());
+  toast('Ссылка на сообщение скопирована');
+ }catch(e){toast('Браузер не разрешил копирование ссылки')}
 }
 async function jumpToMessage(chatId,messageId){
  const targetChat=state.chats.find(c=>c.id===Number(chatId));
@@ -774,8 +785,13 @@ async function init(){try{
  await materialProgressReady;
  if(!state.token){showAuth();return}
  await refreshMe();applyTheme(state.user.theme||state.theme);applyUI();await loadChats();initSocket();
- const inviteToken=new URLSearchParams(location.search).get('invite');
+ const params=new URLSearchParams(location.search);
+ const inviteToken=params.get('invite');
  if(inviteToken)await showInvitePreview(inviteToken);
+ else{
+  const linkedChat=Number(params.get('chat')),linkedMessage=Number(params.get('message'));
+  if(linkedChat>0&&linkedMessage>0)await jumpToMessage(linkedChat,linkedMessage);
+ }
 }catch(e){localStorage.removeItem('vg_token');state.token=null;state.user=null;showAuth()}}
 $('#newChat').onclick=()=>{closeSpaceMenu();createChat('group')};
 $('#newChatMenu').onclick=e=>{e.stopPropagation();const menu=$('#newChatMenuItems'),open=menu.classList.contains('hidden');menu.classList.toggle('hidden',!open);$('#newChatMenu').setAttribute('aria-expanded',String(open));};
