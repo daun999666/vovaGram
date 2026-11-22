@@ -116,6 +116,21 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const unreadBefore = await request(baseUrl, ownerToken, "/api/chats");
   assert.equal(unreadBefore.body.chats.find(x => x.id === chatId).unread_count, 2);
 
+  const searched = await request(baseUrl, ownerToken, "/api/search/messages?q=second%20message");
+  assert.equal(searched.status, 200);
+  assert.equal(searched.body.messages.length, 1);
+  assert.equal(searched.body.messages[0].id, second.body.message.id);
+
+  const starred = await request(baseUrl, ownerToken, `/api/chats/${chatId}/preferences`, {
+    method: "PATCH", body: JSON.stringify({ starred: true, archived: true })
+  });
+  assert.equal(starred.status, 200);
+  assert.deepEqual(starred.body.preferences, { archived: 1, starred: 1, muted: 0 });
+  const withPreferences = await request(baseUrl, ownerToken, "/api/chats");
+  const preferredChat = withPreferences.body.chats.find(x => x.id === chatId);
+  assert.equal(preferredChat.is_starred, 1);
+  assert.equal(preferredChat.is_archived, 1);
+
   const saved = await request(baseUrl, ownerToken, `/api/messages/${second.body.message.id}/save`, { method: "POST", body: "{}" });
   assert.equal(saved.status, 200);
   const savedList = await request(baseUrl, ownerToken, "/api/saved");
@@ -141,4 +156,7 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(outsider.status, 200);
   const denied = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/messages`);
   assert.equal(denied.status, 403);
+  const privateSearch = await request(baseUrl, outsider.body.token, "/api/search/messages?q=second%20message");
+  assert.equal(privateSearch.status, 200);
+  assert.equal(privateSearch.body.messages.length, 0);
 });
