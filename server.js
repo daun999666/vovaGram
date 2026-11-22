@@ -513,8 +513,8 @@ app.get("/api/channels",auth,(req,res)=>{
   const channels=q(`SELECT c.id,c.title,c.description,c.avatar,c.username,c.created_at,
     (SELECT COUNT(*) FROM members m WHERE m.chat_id=c.id) AS member_count
     FROM chats c WHERE c.type='channel' AND c.username IS NOT NULL AND c.username<>'' 
-      AND (?='' OR c.title LIKE ? ESCAPE '\\' OR c.username LIKE ? ESCAPE '\\')
-    ORDER BY member_count DESC,c.id DESC LIMIT 50`).all(search,like,like);
+      AND (?='' OR instr(lower(c.title),lower(?))>0 OR instr(lower(c.username),lower(?))>0)
+    ORDER BY member_count DESC,c.id DESC LIMIT 50`).all(search,search,search);
   res.json({channels});
 });
 app.post("/api/channels/:id/subscribe",auth,(req,res)=>{
