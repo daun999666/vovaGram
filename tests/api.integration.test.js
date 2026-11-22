@@ -239,6 +239,15 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const unreadBefore = await request(baseUrl, ownerToken, "/api/chats");
   assert.equal(unreadBefore.body.chats.find(x => x.id === chatId).unread_count, 2);
 
+  const memberRead = await request(baseUrl, memberToken, `/api/chats/${chatId}/read`, {
+    method: "POST", body: "{}"
+  });
+  assert.equal(memberRead.status, 200);
+  const readers = await request(baseUrl, ownerToken, `/api/messages/${first.body.message.id}/readers`);
+  assert.equal(readers.status, 200);
+  assert.equal(readers.body.readers.length, 1);
+  assert.equal(readers.body.readers[0].username, "v2member" + suffix);
+
   const hidden = await request(baseUrl, ownerToken, `/api/messages/${third.body.message.id}/hide`, { method: "POST", body: "{}" });
   assert.equal(hidden.status, 200);
   const ownerVisibleHistory = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`);
@@ -323,6 +332,8 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(privateSearch.body.messages.length, 0);
   const privateReactionUsers = await request(baseUrl, outsider.body.token, `/api/messages/${second.body.message.id}/reactions?emoji=%F0%9F%94%A5`);
   assert.equal(privateReactionUsers.status, 404);
+  const privateReaders = await request(baseUrl, outsider.body.token, `/api/messages/${first.body.message.id}/readers`);
+  assert.equal(privateReaders.status, 404);
   const deniedDraft = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/draft`);
   assert.equal(deniedDraft.status, 403);
   const deniedSchedule = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/scheduled`, {
