@@ -803,3 +803,30 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .m3-join-actions{display:flex;gap:6px;flex:none}
 .m3-join-actions button{padding:8px 10px;font-size:12px}
 @media(max-width:520px){.m3-join-request{align-items:flex-start;flex-direction:column}.m3-join-actions{width:100%}.m3-join-actions button{flex:1}}
+
+/* Keep the audio seek control visibly discoverable and keyboard operable. */
+.media-timeline .media-wave-range{
+ top:-9px!important;left:0!important;width:100%!important;height:28px!important;
+ padding:0!important;opacity:1!important;z-index:5!important;
+ background:transparent!important;border:0!important;outline:0!important;
+ cursor:pointer;touch-action:pan-y;
+}
+.media-timeline .media-wave-range::-webkit-slider-runnable-track{
+ height:6px!important;border:0!important;border-radius:999px!important;
+ background:linear-gradient(to right,var(--primary) 0%,var(--primary) var(--seek-progress,0%),color-mix(in srgb,var(--outline) 76%,var(--surface2)) var(--seek-progress,0%),color-mix(in srgb,var(--outline) 76%,var(--surface2)) 100%)!important;
+}
+.media-timeline .media-wave-range::-moz-range-track{
+ height:6px!important;border:0!important;border-radius:999px!important;
+ background:linear-gradient(to right,var(--primary) 0%,var(--primary) var(--seek-progress,0%),color-mix(in srgb,var(--outline) 76%,var(--surface2)) var(--seek-progress,0%),color-mix(in srgb,var(--outline) 76%,var(--surface2)) 100%)!important;
+}
+.media-timeline .media-wave-range::-webkit-slider-thumb{
+ appearance:none!important;width:16px!important;height:16px!important;margin-top:-5px!important;
+ border:3px solid var(--surface)!important;border-radius:50%!important;
+ background:var(--primary)!important;box-shadow:0 1px 6px #0004!important;opacity:1!important;
+}
+.media-timeline .media-wave-range::-moz-range-thumb{
+ width:14px!important;height:14px!important;border:3px solid var(--surface)!important;
+ border-radius:50%!important;background:var(--primary)!important;
+ box-shadow:0 1px 6px #0004!important;opacity:1!important;
+}
+.media-timeline .media-wave-range:focus-visible{outline:2px solid var(--primary)!important;outline-offset:5px!important}
