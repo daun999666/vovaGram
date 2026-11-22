@@ -272,13 +272,13 @@ app.post("/api/login",(req,res)=>{
   if(buckets.some(key=>isThrottled(key))) return res.status(429).json({error:"Слишком много неудачных попыток входа. Попробуйте через 15 минут."});
   const u = q("SELECT * FROM users WHERE username=? OR id IN (SELECT user_id FROM user_names WHERE username=?) LIMIT 1").get(username,username);
   if (!u || !bcrypt.compareSync(password,u.password_hash)) {
-    const locks=buckets.map(key=>registerThrottleFailure(key));
+    const locks=buckets.map((key,index)=>registerThrottleFailure(key,{maxFailures:index===0?20:AUTH_MAX_FAILURES}));
     if(u) recordAccountEvent(u.id,"login_failed");
     if(locks.some(Boolean)) return res.status(429).json({error:"Слишком много неудачных попыток входа. Попробуйте через 15 минут."});
     return res.status(401).json({error:"Неверный юзернейм или пароль"});
   }
   if (u.banned) return res.status(403).json({error:"Аккаунт заблокирован"});
-  buckets.forEach(clearThrottle);
+  clearThrottle(buckets[1]);
   recordAccountEvent(u.id,"login_succeeded");
   res.json({token:tokenFor(u,req),user:publicUser(u)});
 });
