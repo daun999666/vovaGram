@@ -273,14 +273,15 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(forwardedHistory.body.messages[0].forwarded_from_name, "V2 Member");
 
   const starred = await request(baseUrl, ownerToken, `/api/chats/${chatId}/preferences`, {
-    method: "PATCH", body: JSON.stringify({ starred: true, archived: true })
+    method: "PATCH", body: JSON.stringify({ starred: true, archived: true, muted: true })
   });
   assert.equal(starred.status, 200);
-  assert.deepEqual(starred.body.preferences, { archived: 1, starred: 1, muted: 0 });
+  assert.deepEqual(starred.body.preferences, { archived: 1, starred: 1, muted: 1 });
   const withPreferences = await request(baseUrl, ownerToken, "/api/chats");
   const preferredChat = withPreferences.body.chats.find(x => x.id === chatId);
   assert.equal(preferredChat.is_starred, 1);
   assert.equal(preferredChat.is_archived, 1);
+  assert.equal(preferredChat.is_muted, 1);
 
   const saved = await request(baseUrl, ownerToken, `/api/messages/${second.body.message.id}/save`, { method: "POST", body: "{}" });
   assert.equal(saved.status, 200);
