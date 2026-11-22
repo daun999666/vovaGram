@@ -760,3 +760,6 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .m3-reaction-user>span:last-child{display:flex;flex-direction:column;gap:2px}
 .m3-reaction-user b{font-size:12px}
 .m3-reaction-user small{font-size:10px;color:var(--muted)}
+
+.message-read{border:0;background:transparent;padding:0 3px;cursor:pointer;border-radius:var(--m3-shape-full)}
+.message-read:hover{background:var(--surface3)}
