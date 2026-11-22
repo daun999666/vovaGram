@@ -1,4 +1,4 @@
-# vovchikGram — build 1.4.1
+# vovchikGram — main · Material 3 Expressive
 
 Material You messenger for desktop browsers and mobile PWA. Server: Node.js + Express + Socket.IO + SQLite. The desktop EXE is packaged with `@yao-pkg/pkg`; Electron is not used.
 
@@ -18,7 +18,9 @@ npm install
 copy .env.example .env
 ```
 
-5. Open `.env` in Notepad. Set your own long `OWNER_PASSWORD`, `DEV_PASSWORD`, and `JWT_SECRET`. Never publish this file.
+5. Open `.env` in Notepad. Set unique long `OWNER_PASSWORD`, `DEV_PASSWORD`, and `JWT_SECRET` values (replace every `CHANGE_ME` placeholder). Never publish or upload your real `.env` file.
+   
+   The repository ZIP contains `.env.example`, not your private `.env`. The Windows launcher creates `.env` from the example when it is missing. If you already had private values, restore them from your own backup; they cannot be recovered from the public repository.
 6. Run:
 
 ```cmd
@@ -70,3 +72,13 @@ On first launch, `@owner` and `@dev` are created only if their passwords are set
 - Image attachments are stored as message attachment metadata; existing message history is preserved by a safe SQLite column migration.
 - Softer Material 3 wallpapers and dimmed wallpaper continuity in the chat list.
 - Chat details now support removing a direct conversation, leaving a group/channel, and deleting owned spaces.
+
+
+## Latest main branch
+
+The current `main` branch contains the Material 3 Expressive interface work, expressive playback waveform/timeline, button groups and toolbars, upload progress indicator, responsive message layout and modal scrolling fixes.
+
+Download the current source archive from:
+https://github.com/daun999666/vovaGram/archive/refs/heads/main.zip
+
+The archive is the project source, not a preconfigured server with personal secrets. Keep your local `.env`, `data/`, and `uploads/` folders when updating an existing installation. Stop the old server first, extract the new source to a separate folder, then copy your old `.env` and `data/` into the new project folder. Do not overwrite these with example data.
