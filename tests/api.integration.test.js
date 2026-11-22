@@ -436,4 +436,45 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
     method: "POST", body: "{}"
   });
   assert.equal(deniedHide.status, 403);
+
+  const activityBefore = await request(baseUrl, ownerToken, "/api/account/activity");
+  assert.equal(activityBefore.status, 200);
+  assert.ok(activityBefore.body.events.some(event => event.event === "login_succeeded"));
+  const wrongCurrentPassword = await request(baseUrl, ownerToken, "/api/account/password", {
+    method: "POST", body: JSON.stringify({ currentPassword: "wrong-password", newPassword: "new-test-password-456" })
+  });
+  assert.equal(wrongCurrentPassword.status, 403);
+  const passwordChanged = await request(baseUrl, ownerToken, "/api/account/password", {
+    method: "POST", body: JSON.stringify({ currentPassword: "test-password-123", newPassword: "new-test-password-456" })
+  });
+  assert.equal(passwordChanged.status, 200);
+  const oldPasswordLogin = await request(baseUrl, null, "/api/login", {
+    method: "POST", body: JSON.stringify({ username: "v2owner" + suffix, password: "test-password-123" })
+  });
+  assert.equal(oldPasswordLogin.status, 401);
+  const newPasswordLogin = await request(baseUrl, null, "/api/login", {
+    method: "POST", body: JSON.stringify({ username: "v2owner" + suffix, password: "new-test-password-456" })
+  });
+  assert.equal(newPasswordLogin.status, 200);
+  const activityAfter = await request(baseUrl, ownerToken, "/api/account/activity");
+  assert.ok(activityAfter.body.events.some(event => event.event === "password_changed"));
+
+  const limited = await request(baseUrl, null, "/api/register", {
+    method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "test-password-123" })
+  });
+  assert.equal(limited.status, 200);
+  for (let attempt=0; attempt<4; attempt++) {
+    const failed = await request(baseUrl, null, "/api/login", {
+      method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "wrong-password" })
+    });
+    assert.equal(failed.status, 401);
+  }
+  const locked = await request(baseUrl, null, "/api/login", {
+    method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "wrong-password" })
+  });
+  assert.equal(locked.status, 429);
+  const blockedCorrectPassword = await request(baseUrl, null, "/api/login", {
+    method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "test-password-123" })
+  });
+  assert.equal(blockedCorrectPassword.status, 429);
 });
