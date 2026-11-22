@@ -262,7 +262,21 @@ async function chatDetails(c){
  const deleteDescription=c.type==='direct'?'Диалог будет скрыт из твоего списка.':canManageDelete?`Удаление ${c.type==='channel'?'канала':'группы'} необратимо: будут удалены сообщения и участники.`:`Ты покинешь ${c.type==='channel'?'канал':'группу'}; у остальных участников он останется.`;
  const formHtml=`<div class="chat-info-head">${avatar(c.avatar,c.title,'public-avatar')}<div><b>${esc(c.title)}</b><small>${esc(c.description||'')}</small></div></div>${canEdit?`<label class="field"><span>Название</span><input id="chatName" value="${esc(c.title)}"></label><label class="field"><span>Описание</span><textarea id="chatDesc">${esc(c.description||'')}</textarea></label><label class="field"><span>Аватар чата</span><input id="chatAvatarFile" type="file" accept="image/*"></label><label class="field"><span>Обои</span><select id="chatWallpaper"><option value="shapes">Мягкие формы</option><option value="m3forms">Капсулы</option><option value="waves">Дуги</option><option value="dots">Точки</option><option value="plain">Без узора</option><option value="__custom">Своя картинка…</option></select></label><label class="field"><span>Свои обои</span><input id="chatWallpaperFile" type="file" accept="image/png,image/jpeg,image/webp"></label>`:''}<p class="muted">Тип: ${c.type==='channel'?'канал':c.type==='group'?'группа':'личный диалог'}</p>${canDelete?`<p class="muted">${deleteDescription}</p>`:''}`;
  const actions='<button class="soft-btn" data-close>Закрыть</button>'+(canEdit?'<button class="filled" id="saveChat">Сохранить</button>':'')+(canDelete?'<button class="danger" id="deleteChannel">'+(c.type==='direct'?'Убрать диалог':canManageDelete?'Удалить пространство':c.type==='channel'?'Покинуть канал':'Покинуть группу')+'</button>':'');
- modal('Информация о чате','Параметры пространства',formHtml,actions);
+ const preferenceHtml='<div class="chat-preference-actions"><h3>Быстрые настройки</h3>'+
+  '<button class="soft-btn" id="toggleChatFavorite"><span class="material-symbols-rounded">'+(Number(c.is_starred)?'star':'star_outline')+'</span>'+(Number(c.is_starred)?'Убрать из избранного':'Добавить в избранное')+'</button>'+
+  '<button class="soft-btn" id="toggleChatArchive"><span class="material-symbols-rounded">'+(Number(c.is_archived)?'unarchive':'archive')+'</span>'+(Number(c.is_archived)?'Вернуть из архива':'Переместить в архив')+'</button></div>';
+ modal('Информация о чате','Параметры пространства',formHtml+preferenceHtml,actions);
+ const updatePreference=async(field,value)=>{
+  try{
+   await api('/api/chats/'+c.id+'/preferences',{method:'PATCH',body:JSON.stringify({[field]:value})});
+   await loadChats();
+   if(state.active?.id===c.id)state.active=state.chats.find(x=>x.id===c.id)||state.active;
+   closeModal();
+   toast(field==='starred'?(value?'Добавлено в избранное':'Убрано из избранного'):(value?'Перемещено в архив':'Возвращено из архива'));
+  }catch(e){toast(e.message)}
+ };
+ $('#toggleChatFavorite').onclick=()=>updatePreference('starred',!Number(c.is_starred));
+ $('#toggleChatArchive').onclick=()=>updatePreference('archived',!Number(c.is_archived));
  if(canEdit){
   $('#chatWallpaper').value=(c.wallpaper||'shapes').startsWith('/uploads/')?'__custom':(c.wallpaper||'shapes');
   $('#saveChat').onclick=async()=>{try{let avatarUrl=c.avatar||'',wallpaper=$('#chatWallpaper').value;const f=$('#chatAvatarFile').files[0],wf=$('#chatWallpaperFile').files[0];if(f)avatarUrl=(await uploadFile(f,'image')).url;if(wf)wallpaper=(await uploadFile(wf,'image')).url;else if(wallpaper==='__custom')wallpaper=c.wallpaper||'shapes';await api('/api/chats/'+c.id,{method:'PATCH',body:JSON.stringify({title:$('#chatName').value,description:$('#chatDesc').value,avatar:avatarUrl,wallpaper})});closeModal();await loadChats();openChat(c.id);toast('Чат обновлён')}catch(e){toast(e.message)}};
