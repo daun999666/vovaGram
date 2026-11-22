@@ -1,8 +1,8 @@
 {
   "name": "vovchikgram",
-  "version": "1.4.2",
+  "version": "2.0.0-dev.1",
   "private": true,
-  "description": "vovchikGram — Material You self-hosted messenger",
+  "description": "vovchikGram 2.0 — Material 3 Expressive self-hosted messenger",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,7 +10,8 @@
     "build:win": "pkg . --targets node22-win-x64 --output dist/vovchikGram.exe",
     "build:linux": "pkg . --targets node22-linux-x64 --output dist/vovchikGram",
     "build:mac": "pkg . --targets node22-macos-x64 --output dist/vovchikGram",
-    "check": "node --check server.js && node --check public/app.js"
+    "check": "node --check server.js && node --check public/app.js && node --check src/shared/validation.js && npm test",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
