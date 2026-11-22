@@ -180,6 +180,28 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const emptyDraft = await request(baseUrl, ownerToken, `/api/chats/${chatId}/draft`);
   assert.equal(emptyDraft.body.draft.body, "");
 
+  const first = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "first message" })
+  });
+  const second = await request(baseUrl, memberToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "second message" })
+  });
+  const third = await request(baseUrl, memberToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "third message" })
+  });
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(third.status, 200);
+
+  const latest = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages?limit=2`);
+  assert.equal(latest.status, 200);
+  assert.deepEqual(latest.body.messages.map(x => x.body), ["second message", "third message"]);
+  assert.equal(latest.body.hasMore, true);
+  const older = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages?before=${latest.body.messages[0].id}&limit=2`);
+  assert.equal(older.status, 200);
+  assert.deepEqual(older.body.messages.map(x => x.body), ["first message"]);
+  assert.equal(older.body.hasMore, false);
+
   const scheduledAt = new Date(Date.now() + 1800).toISOString();
   const scheduled = await request(baseUrl, ownerToken, `/api/chats/${chatId}/scheduled`, {
     method: "POST", body: JSON.stringify({ body: "scheduled delivery integration", scheduledAt })
@@ -204,28 +226,6 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   }
   assert.equal(scheduledDelivered,true,"scheduled message was not delivered by the server dispatcher");
 
-
-  const first = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`, {
-    method: "POST", body: JSON.stringify({ body: "first message" })
-  });
-  const second = await request(baseUrl, memberToken, `/api/chats/${chatId}/messages`, {
-    method: "POST", body: JSON.stringify({ body: "second message" })
-  });
-  const third = await request(baseUrl, memberToken, `/api/chats/${chatId}/messages`, {
-    method: "POST", body: JSON.stringify({ body: "third message" })
-  });
-  assert.equal(first.status, 200);
-  assert.equal(second.status, 200);
-  assert.equal(third.status, 200);
-
-  const latest = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages?limit=2`);
-  assert.equal(latest.status, 200);
-  assert.deepEqual(latest.body.messages.map(x => x.body), ["second message", "third message"]);
-  assert.equal(latest.body.hasMore, true);
-  const older = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages?before=${latest.body.messages[0].id}&limit=2`);
-  assert.equal(older.status, 200);
-  assert.deepEqual(older.body.messages.map(x => x.body), ["first message"]);
-  assert.equal(older.body.hasMore, false);
 
   const unreadBefore = await request(baseUrl, ownerToken, "/api/chats");
   assert.equal(unreadBefore.body.chats.find(x => x.id === chatId).unread_count, 2);
