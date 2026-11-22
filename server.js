@@ -255,14 +255,13 @@ app.post("/api/register", (req,res)=>{
   if (!/^[a-z0-9_]{3,24}$/.test(username)) return res.status(400).json({error:"Юзернейм: 3–24 символа, латиница, цифры и _"});
   if (password.length < 8) return res.status(400).json({error:"Пароль должен быть не короче 8 символов"});
   if (q("SELECT id FROM users WHERE username=? UNION SELECT user_id AS id FROM user_names WHERE username=?").get(username,username)) return res.status(409).json({error:"Юзернейм уже занят"});
-  const registrationBlocked=registerThrottleFailure(registerKey,{windowMs:60*60*1000,lockMs:60*60*1000,maxFailures:5});
+  const registrationBlocked=registerThrottleFailure(registerKey,{windowMs:60*60*1000,lockMs:60*60*1000,maxFailures:6});
   if(registrationBlocked) return res.status(429).json({error:"Лимит регистраций с этого подключения исчерпан. Попробуйте позже."});
   try {
     const number = uniqueNumber();
     const info = q("INSERT INTO users(number,username,password_hash,display_name) VALUES(?,?,?,?)")
       .run(number,username,bcrypt.hashSync(password,10),displayName || username);
     const u = getUser.get(info.lastInsertRowid);
-    clearThrottle(registerKey);
     recordAccountEvent(u.id,"account_registered");
     return res.json({token:tokenFor(u,req), user:publicUser(u)});
   } catch { return res.status(500).json({error:"Не удалось создать аккаунт"}); }
