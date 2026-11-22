@@ -238,7 +238,14 @@ function addMessage(m,{prepend=false}={}){
  let reactions={};try{reactions=JSON.parse(m.reactions||'{}')}catch{}
  const react=Object.entries(reactions).filter(([,ids])=>Array.isArray(ids)&&ids.length).map(([emo,ids])=>'<span class="reaction-entry"><button class="reaction" data-react="'+esc(emo)+'">'+esc(emo)+' '+ids.length+'</button><button class="reaction-users" data-react-users="'+esc(emo)+'" title="Кто поставил реакцию" aria-label="Кто поставил реакцию">'+m3Icon('groups')+'</button></span>').join('');
  let attachments=[];try{attachments=JSON.parse(m.attachments||'[]')}catch{}
- const media=attachments.map(a=>'<a class="message-image-link" href="'+esc(a.url)+'" target="_blank" rel="noopener"><img class="message-image" src="'+esc(a.url)+'" alt="'+esc(a.name||'Изображение')+'" loading="lazy"></a>').join('');
+ const media=attachments.map(a=>{
+  const url=esc(a.url),name=esc(a.name||'Вложение'),mime=String(a.mime||''),size=Number(a.size)||0;
+  if(mime.startsWith('image/'))return '<a class="message-image-link" href="'+url+'" target="_blank" rel="noopener"><img class="message-image" src="'+url+'" alt="'+name+'" loading="lazy"></a>';
+  if(mime.startsWith('video/'))return '<video class="message-video" controls preload="metadata"><source src="'+url+'" type="'+esc(mime)+'"></video>';
+  const icon=mime==='application/pdf'?'picture_as_pdf':mime.startsWith('text/')?'description':mime.includes('wordprocessingml')?'article':'folder_zip';
+  const sizeLabel=size?size<1024*1024?(size/1024).toFixed(0)+' КБ':(size/1024/1024).toFixed(1)+' МБ':'Файл';
+  return '<a class="message-file-card" href="'+url+'" target="_blank" rel="noopener" download="'+name+'"><span class="material-symbols-rounded">'+icon+'</span><span><b>'+name+'</b><small>'+sizeLabel+'</small></span><span class="material-symbols-rounded">download</span></a>';
+ }).join('');
  const date=m.created_at?new Date(String(m.created_at).replace(' ','T')+'Z'):new Date();
  const time=Number.isNaN(date.getTime())?'':date.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
  const el=document.createElement('article');
@@ -400,8 +407,8 @@ function setTransferProgress(progress,label){
 function hideTransferProgress(){const box=$('#transferProgress');if(box)box.classList.add('hidden')}
 function uploadFile(file,kind){
  return new Promise((resolve,reject)=>{
-  const max=kind==='audio'?15*1024*1024:5*1024*1024;
-  if(file.size>max)return reject(Error(kind==='audio'?'Максимум 15 МБ':'Максимум 5 МБ'));
+  const max=kind==='audio'?15*1024*1024:kind==='image'?5*1024*1024:20*1024*1024;
+  if(file.size>max)return reject(Error(kind==='audio'?'Максимум 15 МБ':kind==='image'?'Изображение до 5 МБ':'Документ или видео до 20 МБ'));
   const reader=new FileReader();
   reader.onprogress=e=>{if(e.lengthComputable)setTransferProgress(e.loaded/e.total*18,'Подготовка '+file.name)};
   reader.onload=()=>{
@@ -409,10 +416,7 @@ function uploadFile(file,kind){
    xhr.setRequestHeader('Content-Type','application/json');
    if(state.token)xhr.setRequestHeader('Authorization','Bearer '+state.token);
    xhr.upload.onprogress=e=>{if(e.lengthComputable)setTransferProgress(18+(e.loaded/e.total*82),'Отправка '+file.name)};
-   xhr.onload=()=>{let data={};try{data=JSON.parse(xhr.responseText||'{}')}catch{}
-    if(xhr.status>=200&&xhr.status<300)resolve(data);
-    else reject(Error(data.error||('Ошибка загрузки '+xhr.status)));
-   };
+   xhr.onload=()=>{let data={};try{data=JSON.parse(xhr.responseText||'{}')}catch{}if(xhr.status>=200&&xhr.status<300)resolve(data);else reject(Error(data.error||('Ошибка загрузки '+xhr.status)))};
    xhr.onerror=()=>reject(Error('Сетевая ошибка при загрузке файла'));
    xhr.onabort=()=>reject(Error('Загрузка отменена'));
    xhr.send(JSON.stringify({kind,data:reader.result}));
@@ -422,8 +426,33 @@ function uploadFile(file,kind){
  });
 }
 let pendingMessageFiles=[];
-function renderAttachmentPreview(){const box=$('#attachmentPreview');if(!box)return;box.innerHTML=pendingMessageFiles.map((f,i)=>`<div class="attachment-chip"><img src="${URL.createObjectURL(f)}" alt=""><span>${esc(f.name)}</span><button type="button" data-remove-attachment="${i}" aria-label="Убрать">×</button></div>`).join('');box.classList.toggle('hidden',!pendingMessageFiles.length);box.querySelectorAll('[data-remove-attachment]').forEach(b=>b.onclick=()=>{pendingMessageFiles.splice(+b.dataset.removeAttachment,1);renderAttachmentPreview()})}
-function addMessageFiles(files){for(const f of files){if(!f.type.startsWith('image/')){toast('Пока можно прикреплять изображения');continue}if(f.size>5*1024*1024){toast('Изображение должно быть до 5 МБ');continue}if(pendingMessageFiles.length>=4){toast('Максимум 4 изображения в одном сообщении');break}pendingMessageFiles.push(f)}renderAttachmentPreview()}
+function renderAttachmentPreview(){
+ const box=$('#attachmentPreview');if(!box)return;
+ box.innerHTML=pendingMessageFiles.map((file,index)=>{
+  const visual=file.type.startsWith('image/')
+   ? '<img src="'+URL.createObjectURL(file)+'" alt="">'
+   : '<span class="material-symbols-rounded attachment-file-icon">'+(file.type==='application/pdf'?'picture_as_pdf':file.type.startsWith('video/')?'movie':'description')+'</span>';
+  const size=file.size<1024*1024?(file.size/1024).toFixed(0)+' КБ':(file.size/1024/1024).toFixed(1)+' МБ';
+  return '<div class="attachment-chip">'+visual+'<span>'+esc(file.name)+' · '+size+'</span><button type="button" data-remove-attachment="'+index+'" aria-label="Убрать">×</button></div>';
+ }).join('');
+ box.classList.toggle('hidden',!pendingMessageFiles.length);
+ box.querySelectorAll('[data-remove-attachment]').forEach(button=>button.onclick=()=>{pendingMessageFiles.splice(Number(button.dataset.removeAttachment),1);renderAttachmentPreview()});
+}
+function addMessageFiles(files){
+ const imageTypes=['image/png','image/jpeg','image/webp','image/gif'];
+ const fileTypes=['application/pdf','text/plain','application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document','video/mp4','video/webm'];
+ for(const file of files){
+  const isImage=imageTypes.includes(file.type),isFile=fileTypes.includes(file.type);
+  if(!isImage&&!isFile){toast('Поддерживаются изображения, PDF, TXT, DOCX, ZIP, MP4 и WebM');continue}
+  const max=isImage?5*1024*1024:20*1024*1024;
+  if(file.size>max){toast(isImage?'Изображение должно быть до 5 МБ':'Документ или видео должно быть до 20 МБ');continue}
+  if(pendingMessageFiles.length>=8){toast('Максимум 8 вложений в сообщении');break}
+  const total=pendingMessageFiles.reduce((sum,item)=>sum+item.size,0)+file.size;
+  if(total>22*1024*1024){toast('Общий размер вложений в одном сообщении — до 22 МБ');break}
+  pendingMessageFiles.push(file);
+ }
+ renderAttachmentPreview();
+}
 async function openScheduledMessages(){
  if(!state.active)return;
  const chatId=state.active.id;
@@ -459,7 +488,7 @@ function openScheduleDialog(){
    const attachments=[];
    for(const file of pendingMessageFiles){
     setTransferProgress(0,'Загрузка '+file.name);
-    const uploaded=await uploadFile(file,'image');
+    const uploaded=await uploadFile(file,file.type.startsWith('image/')?'image':'file');
     attachments.push({url:uploaded.url,mime:file.type,name:file.name});
    }
    await api('/api/chats/'+chatId+'/scheduled',{method:'POST',body:JSON.stringify({body,attachments,scheduledAt:date.toISOString()})});
@@ -479,7 +508,7 @@ async function sendCurrentMessage(){
   const attachments=[];
   for(const file of pendingMessageFiles){
    setTransferProgress(0,'Загрузка '+file.name);
-   const up=await uploadFile(file,'image');
+   const up=await uploadFile(file,file.type.startsWith('image/')?'image':'file');
    attachments.push({url:up.url,mime:file.type,name:file.name});
   }
   const d=await api(`/api/chats/${chatId}/messages`,{method:'POST',body:JSON.stringify({body,replyTo:state.replyTo,attachments})});
