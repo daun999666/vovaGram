@@ -258,7 +258,7 @@ function addMessage(m,{prepend=false}={}){
  const date=m.created_at?new Date(String(m.created_at).replace(' ','T')+'Z'):new Date();
  const time=Number.isNaN(date.getTime())?'':date.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
  const el=document.createElement('article');
- el.id='msg-'+m.id;el.dataset.messageId=String(m.id);el.dataset.sender=m.username||'';el.className='message m3-message'+(mine?' mine':'');
+ el.id='msg-'+m.id;el.dataset.messageId=String(m.id);el.dataset.sender=m.username||'';el.dataset.canDelete=String(mine||['owner','dev'].includes(state.user?.role));el.className='message m3-message'+(mine?' mine':'');
  el.innerHTML='<div class="message-avatar">'+avatar(senderAvatar,senderName,'sender-avatar')+'</div>'+
   '<div class="message-content">'+forwardHeader+'<div class="sender"><b>'+esc(senderName)+'</b> '+(m.sender_is_channel?'':badge(mine?state.user:m))+(m.chat_role==='owner'?'<small class="message-role-chip">Владелец</small>':m.chat_role==='admin'?'<small class="message-role-chip">Админ</small>':'')+'</div>'+
   reply+(m.body?'<p>'+formatMessageBody(m.body)+'</p>':'')+media+
@@ -269,7 +269,7 @@ function addMessage(m,{prepend=false}={}){
   '<button data-copy title="Копировать" aria-label="Копировать">'+m3Icon('content_copy')+'</button>'+
   '<button data-message-link title="Скопировать ссылку" aria-label="Скопировать ссылку">'+m3Icon('link')+'</button>'+
   '<button data-reply title="Ответить" aria-label="Ответить">'+m3Icon('reply')+'</button>'+
-  '<button data-select-message title="Выбрать сообщение" aria-label="Выбрать сообщение">'+m3Icon('check_box_outline_blank')+'</button>'+
+  ((mine||['owner','dev'].includes(state.user?.role))?'<button data-select-message title="Выбрать сообщение" aria-label="Выбрать сообщение">'+m3Icon('check_box_outline_blank')+'</button>':'')+
   '<button data-save title="В Избранное" aria-label="В Избранное">'+m3Icon('bookmark_add')+'</button>'+
   '<button data-hide-me title="Удалить у меня" aria-label="Удалить у меня">'+m3Icon('visibility_off')+'</button>'+
   '<button data-forward title="Переслать" aria-label="Переслать">'+m3Icon('forward')+'</button>'+
@@ -1064,7 +1064,7 @@ function closeSpaceMenu(){const menu=$('#newChatMenuItems');if(menu)menu.classLi
 $('#newChatMenuItems').querySelectorAll('[data-create-space]').forEach(b=>b.onclick=()=>{const kind=b.dataset.createSpace;closeSpaceMenu();createChat(kind)});
 document.addEventListener('click',e=>{if(!e.target.closest('.m3-split-button'))closeSpaceMenu()});
 $('#loadMoreMessages').onclick=loadOlderMessages;
- $('#bulkMessageToolbar').addEventListener('click',e=>{const action=e.target.closest('[data-bulk-action]')?.dataset.bulkAction;if(action==='delete')bulkDeleteSelected();else if(action==='clear')clearMessageSelection();else if(action==='all'){const ids=[...document.querySelectorAll('#messages .message')].map(el=>Number(el.dataset.messageId)).filter(Boolean);for(const id of ids.slice(0,100))state.selectedMessageIds.add(id);state.selectionMode=state.selectedMessageIds.size>0;updateBulkToolbar()}});
+ $('#bulkMessageToolbar').addEventListener('click',e=>{const action=e.target.closest('[data-bulk-action]')?.dataset.bulkAction;if(action==='delete')bulkDeleteSelected();else if(action==='clear')clearMessageSelection();else if(action==='all'){const ids=[...document.querySelectorAll('#messages .message')].filter(el=>el.dataset.canDelete==='true').map(el=>Number(el.dataset.messageId)).filter(Boolean);for(const id of ids.slice(0,100))state.selectedMessageIds.add(id);state.selectionMode=state.selectedMessageIds.size>0;updateBulkToolbar()}});
 $('#scheduleMessage').onclick=openScheduleDialog;
 $('#welcomeCreate').onclick=createChat;$('#settingsBtn').onclick=settings;$('#drawerProfile').onclick=()=>state.user?profileSide():showAuth();$('#profileBtn').onclick=()=>state.user?profileSide():showAuth();$('#accountBtn').onclick=()=>state.user?settings():showAuth();$('#menuPlayer').onclick=openMedia;$('#playerBtn').onclick=()=>$('#playerDock').classList.toggle('hidden');$('#closePlayer').onclick=()=>$('#playerDock').classList.add('hidden');$('#emojiBtn').onclick=openEmoji;$('#attachBtn').onclick=()=>$('#messageFilePicker').click();
 $('#chatFab').onclick=e=>{e.stopPropagation();const menu=$('#chatFabMenu'),open=menu.classList.contains('hidden');menu.classList.toggle('hidden',!open);$('#chatFab').setAttribute('aria-expanded',String(open));};
