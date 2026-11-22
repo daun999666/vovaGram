@@ -29,9 +29,11 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: true, credentials: true } });
 
-const dataDir = process.pkg
-  ? path.join(process.env.APPDATA || os.homedir(), "vovchikGram")
-  : path.join(__dirname, "data");
+const dataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : process.pkg
+    ? path.join(process.env.APPDATA || os.homedir(), "vovchikGram")
+    : path.join(__dirname, "data");
 fs.mkdirSync(dataDir, { recursive: true });
 const uploadDir = path.join(dataDir, "uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
