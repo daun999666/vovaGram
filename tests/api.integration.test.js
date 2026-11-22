@@ -180,6 +180,31 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const emptyDraft = await request(baseUrl, ownerToken, `/api/chats/${chatId}/draft`);
   assert.equal(emptyDraft.body.draft.body, "");
 
+  const scheduledAt = new Date(Date.now() + 1800).toISOString();
+  const scheduled = await request(baseUrl, ownerToken, `/api/chats/${chatId}/scheduled`, {
+    method: "POST", body: JSON.stringify({ body: "scheduled delivery integration", scheduledAt })
+  });
+  assert.equal(scheduled.status, 200, JSON.stringify(scheduled.body));
+  const pendingScheduled = await request(baseUrl, ownerToken, `/api/chats/${chatId}/scheduled`);
+  assert.equal(pendingScheduled.body.messages.some(x => x.id === scheduled.body.scheduled.id), true);
+
+  const scheduledCancel = await request(baseUrl, ownerToken, `/api/chats/${chatId}/scheduled`, {
+    method: "POST", body: JSON.stringify({ body: "this should be cancelled", scheduledAt: new Date(Date.now() + 60000).toISOString() })
+  });
+  assert.equal(scheduledCancel.status, 200);
+  const cancelled = await request(baseUrl, ownerToken, `/api/scheduled/${scheduledCancel.body.scheduled.id}`, { method: "DELETE" });
+  assert.equal(cancelled.status, 200);
+
+  let scheduledDelivered=false;
+  const deliveryDeadline=Date.now()+10000;
+  while(Date.now()<deliveryDeadline&&!scheduledDelivered){
+    const history=await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages?limit=100`);
+    scheduledDelivered=history.body.messages.some(x=>x.body==="scheduled delivery integration");
+    if(!scheduledDelivered) await new Promise(resolve=>setTimeout(resolve,250));
+  }
+  assert.equal(scheduledDelivered,true,"scheduled message was not delivered by the server dispatcher");
+
+
   const first = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`, {
     method: "POST", body: JSON.stringify({ body: "first message" })
   });
@@ -287,6 +312,10 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(privateSearch.body.messages.length, 0);
   const deniedDraft = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/draft`);
   assert.equal(deniedDraft.status, 403);
+  const deniedSchedule = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/scheduled`, {
+    method: "POST", body: JSON.stringify({ body: "intruder", scheduledAt: new Date(Date.now() + 60000).toISOString() })
+  });
+  assert.equal(deniedSchedule.status, 403);
   const deniedHide = await request(baseUrl, outsider.body.token, `/api/messages/${third.body.message.id}/hide`, {
     method: "POST", body: "{}"
   });
