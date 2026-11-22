@@ -319,6 +319,10 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
     method: "PATCH", body: JSON.stringify({ title: "v2 integration", description: "", avatar: "", wallpaper: "", slowModeSeconds: 7 })
   });
   assert.equal(invalidSlowMode.status, 400);
+  const disableSlowMode = await request(baseUrl, ownerToken, `/api/chats/${chatId}`, {
+    method: "PATCH", body: JSON.stringify({ title: "v2 integration", description: "", avatar: "", wallpaper: "", slowModeSeconds: 0 })
+  });
+  assert.equal(disableSlowMode.status, 200);
   const handledJoinRequests = await request(baseUrl, ownerToken, `/api/chats/${chatId}/join-requests`);
   assert.equal(handledJoinRequests.body.requests.length, 0);
   const bulkMuted = await request(baseUrl, ownerToken, `/api/chats/${chatId}/members/bulk`, {
