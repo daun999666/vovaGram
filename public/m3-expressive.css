@@ -315,3 +315,193 @@ button:active{transform:scale(.97)}
  .message.m3-message,.messages>.message.m3-message{max-width:100%!important}
  .message-content{max-width:calc(100% - 36px)!important}
 }
+
+
+/* Full-window containment: scroll the chat list/modal, never the page */
+html,body{width:100%;height:100%;min-height:0;overflow:hidden}
+#app{height:100dvh;min-height:0;overflow:hidden}
+.main{height:100dvh;min-height:0;overflow:hidden}
+.topbar{height:68px;min-height:68px;flex:0 0 68px}
+.conversation{height:auto!important;min-height:0!important;flex:1 1 0!important;overflow:hidden!important}
+.messages{
+ flex:1 1 0!important;min-height:0!important;max-height:none!important;
+ padding:20px clamp(14px,2vw,32px)!important;
+ overflow-x:hidden!important;overflow-y:auto!important;
+ overscroll-behavior:contain;scrollbar-gutter:stable;
+}
+.message.m3-message,.messages>.message.m3-message{
+ align-self:flex-start!important;max-width:100%!important;width:fit-content!important;
+}
+.message-content{
+ min-width:0!important;width:fit-content;max-width:min(760px,calc(100vw - 380px))!important;
+ flex:0 1 auto;overflow-wrap:anywhere;word-break:break-word;
+}
+.message-content p,.message-content .reply-preview,.message-content a{
+ max-width:100%;overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;
+}
+.message-content img,.message-image{display:block;max-width:100%!important;height:auto;object-fit:contain}
+.message-image-link{display:block;width:fit-content;max-width:100%!important}
+.message-content .message-foot{max-width:100%;flex-wrap:wrap}
+.message-content .message-actions{flex-wrap:wrap}
+#conversation{min-width:0;min-height:0;overflow:hidden}
+.modal-backdrop{
+ position:fixed;inset:0;z-index:100;display:flex!important;align-items:center;justify-content:center;
+ overflow-y:auto!important;overflow-x:hidden!important;padding:14px!important;
+ overscroll-behavior:contain;touch-action:pan-y;
+}
+.modal{
+ display:flex!important;flex-direction:column!important;min-height:0!important;
+ width:min(560px,100%)!important;height:auto!important;max-height:calc(100dvh - 28px)!important;
+ overflow:hidden!important;flex:0 0 auto;
+}
+.modal:has(.settings-section),.modal:has(.admin-grid),.modal:has(.admin-user-list){
+ height:calc(100dvh - 28px)!important;
+}
+.modal-head{flex:0 0 auto;min-width:0}
+.modal-content{
+ display:block;flex:1 1 auto!important;min-height:0!important;max-height:none!important;
+ overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain;
+ touch-action:pan-y;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable;
+ padding:4px 8px 12px 0!important;
+}
+.modal-actions{flex:0 0 auto;position:relative;z-index:1;background:var(--surface);padding:12px 0 max(4px,env(safe-area-inset-bottom))!important}
+.modal-content .settings-section{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.modal-content .field,.modal-content .field>*{min-width:0;max-width:100%}
+.modal-content .palette{grid-template-columns:repeat(auto-fit,minmax(96px,1fr));min-width:0}
+
+/* Refined M3 Expressive color, type, shape, and motion tokens */
+:root{
+ --m3-sys-primary:var(--primary);--m3-sys-on-primary:#fff;
+ --m3-sys-surface:var(--surface);--m3-sys-surface-container:var(--surface2);
+ --m3-sys-surface-container-high:var(--surface3);--m3-sys-outline:var(--outline);
+ --m3-shape-xs:8px;--m3-shape-sm:12px;--m3-shape-md:18px;--m3-shape-lg:26px;--m3-shape-xl:34px;--m3-shape-full:999px;
+ --m3-motion-standard:cubic-bezier(.2,0,0,1);--m3-motion-emphasized:cubic-bezier(.2,0,0,1.2);
+ --m3-shadow-1:0 1px 3px #10101818,0 2px 5px #10101810;
+ --m3-shadow-2:0 8px 22px #10101824,0 2px 6px #10101812;
+}
+body,button,input,textarea,select{font-family:var(--font-family,'Roboto Flex',Roboto,system-ui,sans-serif)}
+button{font-weight:500;letter-spacing:.01em}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid color-mix(in srgb,var(--primary) 42%,transparent);outline-offset:2px}
+.soft-btn{min-height:40px;padding:9px 17px;border-radius:var(--m3-shape-full);background:var(--surface3);border:1px solid transparent;font-weight:600;box-shadow:none}
+.filled{min-height:40px;padding:10px 18px;border-radius:17px 24px 24px 24px;font-weight:700;box-shadow:var(--m3-shadow-1)}
+.filled:hover{border-radius:24px 17px 24px 24px;box-shadow:var(--m3-shadow-2);transform:translateY(-1px)}
+.icon-btn{width:42px;height:42px;border-radius:50%;display:inline-grid;place-items:center;background:transparent;color:var(--text);transition:background .2s var(--m3-motion-standard),border-radius .28s var(--m3-motion-emphasized),transform .2s var(--m3-motion-emphasized)}
+.icon-btn:hover{background:color-mix(in srgb,var(--primary) 13%,var(--surface3))}
+.icon-btn:active{border-radius:13px;transform:scale(.93)}
+.m3-app-bar{background:color-mix(in srgb,var(--surface) 93%,transparent);backdrop-filter:blur(22px);border-bottom:1px solid color-mix(in srgb,var(--outline) 48%,transparent)}
+.m3-toolbar{display:flex;align-items:center;gap:5px;padding:5px 7px;border-radius:var(--m3-shape-full);background:color-mix(in srgb,var(--surface2) 76%,transparent);border:1px solid color-mix(in srgb,var(--outline) 40%,transparent)}
+.m3-toolbar .icon-btn{width:38px;height:38px}
+.m3-toolbar .soft-btn{min-height:38px;padding:7px 14px}
+.folder-tabs.m3-button-group{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px!important;width:100%;padding:4px;background:var(--surface3);border-radius:var(--m3-shape-full);overflow:hidden!important;scrollbar-width:none!important}
+.folder-tabs.m3-button-group .folder{min-width:0;width:100%;height:36px;padding:0 2px!important;border-radius:var(--m3-shape-full);font-size:clamp(10px,.8vw,12px)!important;overflow:hidden;text-overflow:ellipsis}
+.folder-tabs.m3-button-group .folder.active{background:var(--primary);color:white;box-shadow:var(--m3-shadow-1);border-radius:20px 20px 20px 8px}
+.folder-tabs.m3-button-group .folder:not(.active):hover{background:color-mix(in srgb,var(--primary) 12%,var(--surface2))}
+.section-label{overflow:visible}
+.m3-split-button{position:relative;display:inline-flex;align-items:stretch;gap:2px;padding:3px;border-radius:var(--m3-shape-full);background:var(--surface3);box-shadow:var(--m3-shadow-1)}
+.m3-split-button>button{display:grid;place-items:center;color:var(--text);background:transparent;min-width:34px;height:32px;border-radius:var(--m3-shape-full)}
+.m3-split-button>button:first-child{width:38px;background:var(--primary);color:#fff;border-radius:15px 50% 50% 15px}
+.m3-split-button>button:last-of-type{width:30px}
+.m3-split-button>button .material-symbols-rounded{margin:0!important}
+.m3-split-button>button:hover{background:color-mix(in srgb,var(--primary) 17%,var(--surface3))}
+.m3-split-button>button:first-child:hover{background:var(--primary);filter:brightness(1.08)}
+.m3-split-button[aria-expanded=true] .m3-split-menu-toggle .material-symbols-rounded{transform:rotate(180deg)}
+.m3-split-menu-toggle .material-symbols-rounded{transition:transform .22s var(--m3-motion-emphasized)}
+.m3-split-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:30;min-width:190px;padding:7px;border:1px solid var(--outline);border-radius:20px;background:var(--surface);box-shadow:var(--m3-shadow-2);animation:m3-menu-enter .2s var(--m3-motion-emphasized) both}
+.m3-split-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;border-radius:13px;background:transparent;text-align:left;font-size:13px}
+.m3-split-menu button:hover{background:var(--surface3)}
+.m3-split-menu button .material-symbols-rounded{margin:0;color:var(--primary)}
+@keyframes m3-menu-enter{from{opacity:0;transform:translateY(-6px) scale(.96)}to{opacity:1;transform:none}}
+
+/* Responsive, organic M3 Expressive wallpaper instead of oversized circles */
+.wallpaper.expressive{
+ opacity:1;background-color:#15131d;
+ background-image:
+  radial-gradient(ellipse 45% 28% at 4% 8%,#8c65b72b 0 98%,transparent 100%),
+  radial-gradient(ellipse 32% 45% at 100% 100%,#7250a52e 0 98%,transparent 100%),
+  repeating-radial-gradient(ellipse at 42% 52%,transparent 0 58px,#b69cff0b 60px 62px,transparent 64px 116px),
+  linear-gradient(135deg,#171521 0%,#11131b 55%,#211a31 100%);
+ background-size:100% 100%,100% 100%,620px 520px,100% 100%;
+ animation:vg-wallpaper-drift 34s ease-in-out infinite alternate;
+}
+.wallpaper.expressive::before,.wallpaper.expressive::after{content:"";position:absolute;pointer-events:none;z-index:0;filter:blur(.2px);mix-blend-mode:screen;will-change:transform,border-radius}
+.wallpaper.expressive::before{
+ width:min(44vw,650px);height:min(42vw,620px);min-width:300px;min-height:300px;right:8%;top:10%;
+ border-radius:44% 56% 63% 37%/48% 38% 62% 52%;
+ background:linear-gradient(140deg,#b99aeb18,#7653aa20 65%,#34234414);
+ animation:vg-shape-morph 23s ease-in-out infinite alternate;
+}
+.wallpaper.expressive::after{
+ width:min(36vw,520px);height:min(38vw,560px);min-width:260px;min-height:260px;left:8%;bottom:-24%;
+ border-radius:59% 41% 34% 66%/40% 63% 37% 60%;
+ background:linear-gradient(135deg,#9272c51a,#4d3a6b24 70%,#15131d10);
+ animation:vg-shape-morph 29s ease-in-out infinite alternate-reverse;
+}
+@keyframes vg-wallpaper-drift{0%{background-position:0% 0%,100% 100%,0 0,center}100%{background-position:5% 4%,95% 94%,24px 18px,center}}
+@keyframes vg-shape-morph{0%{border-radius:44% 56% 63% 37%/48% 38% 62% 52%;transform:rotate(-7deg) scale(.96)}50%{border-radius:62% 38% 44% 56%/56% 63% 37% 44%;transform:rotate(4deg) scale(1.03)}100%{border-radius:37% 63% 56% 44%/42% 36% 64% 58%;transform:rotate(-3deg) scale(1)}}
+
+/* M3 toolbars, hover action rails, and connected control groups */
+.message-content .message-actions{
+ display:flex;align-items:center;gap:2px;padding:3px 5px;border-radius:var(--m3-shape-full);
+ background:var(--surface3);border:1px solid color-mix(in srgb,var(--outline) 50%,transparent);
+ box-shadow:var(--m3-shadow-1);opacity:0;transform:translateY(4px);
+ transition:opacity .18s ease,transform .22s var(--m3-motion-emphasized);
+}
+.message-content:hover .message-actions,.message-content:focus-within .message-actions{opacity:1;transform:none}
+.message-actions button{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:transparent}
+.message-actions button:hover{background:color-mix(in srgb,var(--primary) 18%,var(--surface))}
+.message-actions .material-symbols-rounded{font-size:18px;margin:0}
+.m3-button-group{display:inline-flex;align-items:center;gap:3px;padding:4px;border-radius:var(--m3-shape-full);background:var(--surface3)}
+.m3-button-group button{min-height:38px;padding:0 14px;border-radius:var(--m3-shape-full);background:transparent}
+.m3-button-group button[aria-pressed=true]{background:var(--primary);color:#fff;box-shadow:var(--m3-shadow-1)}
+
+/* M3 progress indicators: rounded track, active wave, determinate/indeterminate */
+.m3-transfer-progress{z-index:2;width:min(850px,calc(100% - 40px));margin:0 auto 2px;padding:7px 12px 5px;border-radius:18px;background:color-mix(in srgb,var(--surface2) 92%,transparent);border:1px solid color-mix(in srgb,var(--outline) 50%,transparent)}
+.m3-transfer-label{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:11px;margin-bottom:5px}
+.m3-wavy-progress{height:20px;position:relative;overflow:hidden;border-radius:var(--m3-shape-full);background:color-mix(in srgb,var(--primary) 8%,var(--surface3))}
+.m3-wavy-progress svg{width:100%;height:100%;display:block}
+.m3-progress-track-path,.m3-progress-active-path{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:5}
+.m3-progress-track-path{stroke:color-mix(in srgb,var(--outline) 80%,transparent)}
+.m3-progress-active-path{stroke:var(--primary);stroke-width:6;filter:drop-shadow(0 1px 3px color-mix(in srgb,var(--primary) 35%,transparent));clip-path:inset(0 calc(100% - var(--transfer-progress,0%)) 0 0)}
+.m3-transfer-progress.is-indeterminate .m3-progress-active-path{clip-path:inset(0 48% 0 0);animation:m3-indeterminate-wave 1.5s ease-in-out infinite}
+@keyframes m3-indeterminate-wave{0%{transform:translateX(-22%)}50%{transform:translateX(18%)}100%{transform:translateX(112%)}}
+.m3-loading-indicator{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;border:3px solid var(--surface3);border-top-color:var(--primary);animation:m3-spin .8s linear infinite;vertical-align:middle}
+@keyframes m3-spin{to{transform:rotate(360deg)}}
+
+/* M3 button families and carousel-style wallpaper chooser */
+.soft-btn{background:var(--surface3);color:var(--text);border:1px solid transparent;border-radius:var(--m3-shape-full);box-shadow:none}
+.filled{background:var(--primary);color:#fff;border:1px solid transparent;border-radius:17px 24px 24px 24px;box-shadow:var(--m3-shadow-1)}
+.danger{border-radius:var(--m3-shape-full)}
+.icon-btn{border:1px solid transparent}
+.palette-item,.wall-sample,.reaction{transition:all .24s var(--m3-motion-emphasized)}
+.palette-item:hover,.wall-sample:hover{transform:translateY(-2px);box-shadow:var(--m3-shadow-2)}
+.wallpaper-options-wide{display:flex!important;gap:10px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;padding:4px 2px 10px;scrollbar-width:thin}
+.wallpaper-options-wide .wall-sample{flex:0 0 126px;scroll-snap-align:start}
+.wall-sample.expressive{background:radial-gradient(ellipse at 12% 15%,#b99aeb 0 22%,transparent 22.5%),radial-gradient(ellipse at 90% 95%,#7650a6 0 27%,transparent 27.5%),repeating-radial-gradient(ellipse at 50% 50%,transparent 0 12px,#ffffff17 13px 14px,transparent 15px 28px),#181522;color:#fff}
+.wallpaper-options-wide::-webkit-scrollbar{height:5px}
+.wallpaper-options-wide::-webkit-scrollbar-thumb{background:var(--outline);border-radius:999px}
+
+/* Expressive playback progress is animated only while audio is playing */
+.media-art .media-snake{animation:none!important}
+.media-panel.is-playing .media-art .media-snake{animation:snake-flow 2.2s linear infinite!important}
+.media-waveform.is-playing .media-wave-flow{animation:m3-wave-flow .82s linear infinite}
+.media-waveform.is-playing .media-wave-active{animation:m3-wave-glow 1.9s ease-in-out infinite}
+
+/* M3 Expressive component motion is opt-out for reduced-motion users */
+button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-timing-function:var(--m3-motion-standard)}
+@media(max-width:900px){
+ .message-content{max-width:calc(100vw - 82px)!important}
+ .main{min-height:0}
+ .messages{padding:14px 12px!important}
+}
+@media(max-width:600px){
+ .modal-backdrop{align-items:flex-end;padding:8px!important}
+ .modal,.modal:has(.settings-section),.modal:has(.admin-grid),.modal:has(.admin-user-list){width:100%!important;height:calc(100dvh - 16px)!important;max-height:calc(100dvh - 16px)!important;border-radius:28px 28px 18px 18px!important}
+ .message-content{max-width:calc(100vw - 68px)!important}
+ .messages{padding:12px 8px!important}
+}
+@media(prefers-reduced-motion:reduce){
+ .wallpaper.expressive,.wallpaper.expressive::before,.wallpaper.expressive::after,.media-waveform.is-playing .media-wave-flow,
+ .media-waveform.is-playing .media-wave-active,.media-waveform.is-playing .media-wave-playhead,.media-panel.is-playing .m3-play-button,
+ .media-panel.is-playing .media-art .media-snake,.m3-indeterminate-wave{animation:none!important}
+ *,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important}
+}
