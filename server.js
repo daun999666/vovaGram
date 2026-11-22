@@ -411,19 +411,6 @@ app.get("/api/search/messages",auth,(req,res)=>{
     ORDER BY m.id DESC LIMIT ?`).all(req.user.id,pattern,chatId,chatId,before,before,limit);
   res.json({messages});
 });
-app.get("/api/search",auth,(req,res)=>{");
-  const messages=q(`SELECT m.id,m.chat_id,m.body,m.created_at,m.reply_to,
-      u.username,u.display_name,u.avatar,c.title AS chat_title,c.type AS chat_type
-    FROM messages m
-    JOIN members mine ON mine.chat_id=m.chat_id AND mine.user_id=?
-    JOIN users u ON u.id=m.user_id
-    JOIN chats c ON c.id=m.chat_id
-    WHERE m.body LIKE ? ESCAPE '\\'
-      AND (?=0 OR m.chat_id=?)
-      AND (?=0 OR m.id<?)
-    ORDER BY m.id DESC LIMIT ?`).all(req.user.id,"%"+escaped+"%",chatId,chatId,before,before,limit);
-  res.json({messages});
-});
 app.get("/api/search",auth,(req,res)=>{
   const term=String(req.query.q||"").trim().replace(/^@/,"").slice(0,40);
   if(term.length<2) return res.json({users:[],chats:[]});
