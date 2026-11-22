@@ -509,6 +509,7 @@ async function chatDetails(c){
  const preferenceHtml='<div class="chat-preference-actions"><h3>Быстрые настройки</h3>'+
   '<button class="soft-btn" id="toggleChatFavorite"><span class="material-symbols-rounded">'+(Number(c.is_starred)?'star':'star_outline')+'</span>'+(Number(c.is_starred)?'Убрать из избранного':'Добавить в избранное')+'</button>'+
   '<button class="soft-btn" id="toggleChatArchive"><span class="material-symbols-rounded">'+(Number(c.is_archived)?'unarchive':'archive')+'</span>'+(Number(c.is_archived)?'Вернуть из архива':'Переместить в архив')+'</button>'+
+  '<button class="soft-btn" id="toggleChatMute"><span class="material-symbols-rounded">'+(Number(c.is_muted)?'notifications':'notifications_off')+'</span>'+(Number(c.is_muted)?'Включить уведомления':'Отключить уведомления')+'</button>'+
   '<button class="soft-btn" id="openScheduledMessages"><span class="material-symbols-rounded">schedule</span>Отложенные сообщения</button></div>';
  const dialog=modal('Информация о чате','Параметры пространства',formHtml+memberPanel+preferenceHtml,actions);
  const updatePreference=async(field,value)=>{
@@ -517,11 +518,13 @@ async function chatDetails(c){
    await loadChats();
    if(state.active?.id===c.id)state.active=state.chats.find(x=>x.id===c.id)||state.active;
    closeModal();
-   toast(field==='starred'?(value?'Добавлено в избранное':'Убрано из избранного'):(value?'Перемещено в архив':'Возвращено из архива'));
+   if(field==='muted'&&!value&&'Notification' in window&&Notification.permission==='default') await Notification.requestPermission();
+   toast(field==='starred'?(value?'Добавлено в избранное':'Убрано из избранного'):field==='muted'?(value?'Уведомления отключены':'Уведомления включены'):(value?'Перемещено в архив':'Возвращено из архива'));
   }catch(e){toast(e.message)}
  };
  $('#toggleChatFavorite').onclick=()=>updatePreference('starred',!Number(c.is_starred));
  $('#toggleChatArchive').onclick=()=>updatePreference('archived',!Number(c.is_archived));
+ $('#toggleChatMute').onclick=()=>updatePreference('muted',!Number(c.is_muted));
  $('#openScheduledMessages').onclick=openScheduledMessages;
  dialog.querySelectorAll('[data-member-role]').forEach(button=>button.onclick=async()=>{
   try{
@@ -639,11 +642,24 @@ async function adminPanel(){
   m.querySelectorAll('[data-delete-user]').forEach(b=>b.onclick=async()=>{const username=b.dataset.username;if(!confirm(`Удалить аккаунт @${username} без возможности восстановления? Его сообщения и медиатека будут удалены, а принадлежащие ему группы при наличии участников перейдут другому участнику.`))return;try{await api('/api/admin/users/'+b.dataset.deleteUser,{method:'DELETE'});toast('Аккаунт удалён');closeModal();adminPanel()}catch(e){toast(e.message)}});
  }catch(e){toast(e.message)}
 }
+function showIncomingNotification(message){
+ const chat=state.chats.find(x=>x.id===Number(message.chat_id));
+ if(!chat||Number(chat.is_muted)||!document.hidden)return;
+ if(!('Notification' in window)||Notification.permission!=='granted')return;
+ const sender=message.display_name||message.username||'Новое сообщение';
+ const preview=String(message.body||'Вложение').slice(0,140);
+ const notification=new Notification(chat.title,{body:sender+': '+preview,icon:'/icons/icon.svg',tag:'vovchikgram-chat-'+chat.id});
+ notification.onclick=()=>{window.focus();const target=state.chats.find(x=>x.id===chat.id);if(target)openChat(chat.id);notification.close()};
+}
 function initSocket(){
  state.socket?.disconnect();state.socket=io({auth:{token:state.token}});
  state.socket.on('presence-snapshot',d=>{state.onlineUsers=new Set((d.userIds||[]).map(Number));renderChats()});
  state.socket.on('presence-update',d=>{if(d.online)state.onlineUsers.add(Number(d.userId));else state.onlineUsers.delete(Number(d.userId));renderChats()});
- state.socket.on('message',m=>{if(state.active?.id===m.chat_id){addMessage(m);markChatRead(m.chat_id)}loadChats()});
+ state.socket.on('message',m=>{
+  if(state.active?.id===m.chat_id&&!document.hidden){addMessage(m);markChatRead(m.chat_id)}
+  else showIncomingNotification(m);
+  loadChats();
+ });
  state.socket.on('message-updated',m=>{if(state.active?.id===m.chat_id)addMessage(m)});
  state.socket.on('message-deleted',d=>$('#msg-'+d.id)?.remove());
  state.socket.on('chat-read',d=>{
