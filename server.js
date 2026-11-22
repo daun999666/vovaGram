@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS message_edits (id INTEGER PRIMARY KEY AUTOINCREMENT,m
 CREATE TABLE IF NOT EXISTS chat_drafts (user_id INTEGER NOT NULL,chat_id INTEGER NOT NULL,body TEXT NOT NULL DEFAULT '',updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chat_id));
 CREATE TABLE IF NOT EXISTS hidden_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,hidden_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocked_users (blocker_id INTEGER NOT NULL,blocked_id INTEGER NOT NULL,blocked_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(blocker_id,blocked_id));
+CREATE TABLE IF NOT EXISTS chat_invites (token TEXT PRIMARY KEY,chat_id INTEGER NOT NULL,created_by INTEGER NOT NULL,expires_at TEXT,max_uses INTEGER DEFAULT 0,uses INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TRIGGER IF NOT EXISTS cleanup_deleted_message_references
 AFTER DELETE ON messages
 BEGIN
@@ -366,6 +367,85 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
   const hasMore=rows.length>limit;
   const messages=rows.slice(0,limit).reverse();
   res.json({messages,hasMore,nextCursor:messages[0]?.id||null});
+});
+app.get("/api/chats/:id/members",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id))
+    return res.status(403).json({error:"Нет доступа"});
+  const members=q(`SELECT u.id,u.username,u.display_name,u.avatar,u.role AS account_role,m.role AS chat_role,m.created_at
+    FROM members m JOIN users u ON u.id=m.user_id
+    WHERE m.chat_id=? ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,u.display_name COLLATE NOCASE`).all(id);
+  res.json({members});
+});
+app.patch("/api/chats/:id/members/:userId",auth,(req,res)=>{
+  const chatId=Number(req.params.id),targetId=Number(req.params.userId),role=String(req.body.role||"member");
+  if(!["admin","member"].includes(role)) return res.status(400).json({error:"Недопустимая роль"});
+  const actor=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!actor) return res.status(403).json({error:"Нет доступа"});
+  const target=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,targetId);
+  if(!target) return res.status(404).json({error:"Участник не найден"});
+  if(target.role==="owner") return res.status(403).json({error:"Нельзя изменить владельца"});
+  const isRoot=["owner","dev"].includes(req.user.role);
+  if(!isRoot&&actor.role!=="owner"&&actor.role!=="admin") return res.status(403).json({error:"Недостаточно прав"});
+  if(!isRoot&&actor.role==="admin"&&(role==="admin"||target.role==="admin"))
+    return res.status(403).json({error:"Администратор может управлять только обычными участниками"});
+  if(actor.role==="admin"&&target.role==="admin"&&!isRoot) return res.status(403).json({error:"Нельзя изменить другого администратора"});
+  q("UPDATE members SET role=? WHERE chat_id=? AND user_id=?").run(role,chatId,targetId);
+  io.to("chat:"+chatId).emit("chat-members-updated",{chatId});
+  res.json({ok:true,userId:targetId,role});
+});
+app.delete("/api/chats/:id/members/:userId",auth,(req,res)=>{
+  const chatId=Number(req.params.id),targetId=Number(req.params.userId);
+  const actor=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!actor) return res.status(403).json({error:"Нет доступа"});
+  const target=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,targetId);
+  if(!target) return res.status(404).json({error:"Участник не найден"});
+  if(target.role==="owner"||targetId===req.user.id) return res.status(403).json({error:"Владельца нельзя удалить; для выхода используй отдельное действие"});
+  const isRoot=["owner","dev"].includes(req.user.role);
+  if(!isRoot&&actor.role!=="owner"&&actor.role!=="admin") return res.status(403).json({error:"Недостаточно прав"});
+  if(!isRoot&&actor.role==="admin"&&target.role!=="member") return res.status(403).json({error:"Администратор может удалить только обычного участника"});
+  q("DELETE FROM members WHERE chat_id=? AND user_id=?").run(chatId,targetId);
+  io.to("chat:"+chatId).emit("chat-member-removed",{chatId,userId:targetId});
+  res.json({ok:true,userId:targetId});
+});
+app.post("/api/chats/:id/invites",auth,(req,res)=>{
+  const chatId=Number(req.params.id);
+  const actor=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!actor) return res.status(403).json({error:"Нет доступа"});
+  if(!["owner","admin"].includes(actor.role)&&!["owner","dev"].includes(req.user.role))
+    return res.status(403).json({error:"Создавать ссылки-приглашения могут владельцы и администраторы"});
+  const expiresIn=Math.min(30*24*60*60,Math.max(0,Number(req.body.expiresInSeconds)||7*24*60*60));
+  const maxUses=Math.min(500,Math.max(0,Number(req.body.maxUses)||0));
+  const token=crypto.randomBytes(24).toString("hex");
+  const expiresAt=expiresIn?new Date(Date.now()+expiresIn*1000).toISOString():null;
+  q("INSERT INTO chat_invites(token,chat_id,created_by,expires_at,max_uses) VALUES(?,?,?,?,?)")
+    .run(token,chatId,req.user.id,expiresAt,maxUses);
+  res.json({invite:{token,chatId,expiresAt,maxUses,uses:0}});
+});
+app.get("/api/invites/:token",(req,res)=>{
+  const invite=q("SELECT * FROM chat_invites WHERE token=?").get(String(req.params.token||""));
+  if(!invite) return res.status(404).json({error:"Приглашение не найдено"});
+  const chat=q("SELECT id,title,description,type,avatar FROM chats WHERE id=?").get(invite.chat_id);
+  if(!chat) return res.status(404).json({error:"Пространство больше не существует"});
+  const expired=!!(invite.expires_at&&new Date(invite.expires_at).getTime()<Date.now());
+  const exhausted=!!(invite.max_uses&&invite.uses>=invite.max_uses);
+  res.json({chat,invite:{expiresAt:invite.expires_at,maxUses:invite.max_uses,uses:invite.uses,valid:!expired&&!exhausted}});
+});
+app.post("/api/invites/:token/join",auth,(req,res)=>{
+  const token=String(req.params.token||"");
+  const invite=q("SELECT * FROM chat_invites WHERE token=?").get(token);
+  if(!invite) return res.status(404).json({error:"Приглашение не найдено"});
+  if(invite.expires_at&&new Date(invite.expires_at).getTime()<Date.now()) return res.status(410).json({error:"Срок приглашения истёк"});
+  if(invite.max_uses&&invite.uses>=invite.max_uses) return res.status(410).json({error:"Лимит использований приглашения исчерпан"});
+  const chat=q("SELECT id,title,type FROM chats WHERE id=?").get(invite.chat_id);
+  if(!chat) return res.status(404).json({error:"Пространство больше не существует"});
+  const join=db.transaction(()=>{
+    q("INSERT OR IGNORE INTO members(chat_id,user_id,role) VALUES(?,?,'member')").run(chat.id,req.user.id);
+    q("UPDATE chat_invites SET uses=uses+1 WHERE token=?").run(token);
+  });
+  try{join()}catch{return res.status(500).json({error:"Не удалось вступить в пространство"})}
+  io.to("chat:"+chat.id).emit("chat-member-joined",{chatId:chat.id,userId:req.user.id});
+  res.json({ok:true,chat});
 });
 app.get("/api/chats/:id/draft",auth,(req,res)=>{
   const id=Number(req.params.id);
