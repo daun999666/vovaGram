@@ -584,8 +584,8 @@ app.get("/api/chats/:id/scheduled",auth,(req,res)=>{
 app.post("/api/chats/:id/scheduled",auth,(req,res)=>{
   const chatId=Number(req.params.id),body=sanitizeMessageBody(req.body.body,4000);
   const rawAttachments=Array.isArray(req.body.attachments)?req.body.attachments.slice(0,8):[];
-  const attachments=rawAttachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"image"))
-    .map(a=>({url:a.url,mime:String(a.mime||"").slice(0,80),name:String(a.name||"image").slice(0,120)}));
+  const attachments=rawAttachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"attachment"))
+    .map(a=>({url:a.url,mime:String(a.mime||"").slice(0,80),name:String(a.name||"attachment").slice(0,120),size:Math.max(0,Math.min(25*1024*1024,Number(a.size)||0))}));
   if(!body&&!attachments.length) return res.status(400).json({error:"Добавь текст или изображение"});
   const scheduledAt=Date.parse(String(req.body.scheduledAt||""));
   if(!Number.isFinite(scheduledAt)||scheduledAt<Date.now()+1000||scheduledAt>Date.now()+30*24*60*60*1000)
@@ -792,15 +792,15 @@ app.post("/api/messages/:id/reaction",auth,(req,res)=>{
 });
 app.post("/api/upload",auth,(req,res)=>{
   const data=String(req.body.data||""),kind=String(req.body.kind||"");
-  const match=data.match(/^data:([a-z0-9.+-]+\\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);
+  const match=data.match(/^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);
   if(!match) return res.status(400).json({error:"Некорректный файл"});
   const mime=match[1].toLowerCase();
   const allowed=kind==="audio"
-    ? /^audio\\/(mpeg|ogg|wav|mp4|aac|flac|webm)$/
+    ? /^audio\/(mpeg|ogg|wav|mp4|aac|flac|webm)$/
     : kind==="image"
-      ? /^image\\/(png|jpeg|webp|gif)$/
+      ? /^image\/(png|jpeg|webp|gif)$/
       : kind==="file"
-        ? /^(application\\/(pdf|zip|vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document)|text\\/plain|video\\/(mp4|webm))$/
+        ? /^(application\/(pdf|zip|vnd\.openxmlformats-officedocument\.wordprocessingml\.document)|text\/plain|video\/(mp4|webm))$/
         : null;
   if(!allowed||!allowed.test(mime)) return res.status(415).json({error:"Этот формат файла не поддерживается"});
   const buffer=Buffer.from(match[2],"base64");
@@ -820,7 +820,7 @@ app.post("/api/upload",auth,(req,res)=>{
     "audio/aac":()=>buffer[0]===0xff&&(buffer[1]&0xf6)===0xf0,
     "audio/webm":()=>buffer.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3])),
     "application/pdf":()=>buffer.subarray(0,5).toString()==="%PDF-",
-    "text/plain":()=>!buffer.includes(0)&&!buffer.toString("utf8").includes("\\uFFFD"),
+    "text/plain":()=>!buffer.includes(0)&&!buffer.toString("utf8").includes("\uFFFD"),
     "application/zip":isZip,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document":isZip,
     "video/mp4":()=>buffer.length>=12&&buffer.subarray(4,8).toString()==="ftyp",
