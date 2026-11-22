@@ -186,7 +186,7 @@ app.use("/uploads", express.static(uploadDir, { fallthrough:false, dotfiles:"den
 // Serve the installed Material Web Components package as same-origin assets.
 app.use("/vendor/material", express.static(path.join(__dirname,"node_modules","material","dist"), { fallthrough:false, dotfiles:"deny", index:false }));
 app.use(express.static(path.join(__dirname,"public")));
-app.get("/api/health", (req,res)=>res.json({ok:true, app:"vovchikGram", version:"2.0.0-dev"}));
+app.get("/api/health", (req,res)=>res.json({ok:true, app:"vovchikGram", version:"2.0.0-dev.4"}));
 
 app.post("/api/register", (req,res)=>{
   const username = cleanUsername(req.body.username);
