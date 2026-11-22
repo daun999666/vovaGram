@@ -181,6 +181,7 @@ function updatePlayerLabels(){
  $('#mediaPlayPause').setAttribute('aria-label',playing?'Пауза':'Воспроизвести');
  $('#mediaPlayPause').title=playing?'Пауза':'Воспроизвести';
  $('#mediaWaveform')?.classList.toggle('is-playing',playing);
+ $('#mediaPanel').classList.toggle('is-playing',playing);
  $('#playerDock').classList.toggle('is-playing',playing);
  const progress=a.duration?Math.min(100,Math.max(0,a.currentTime/a.duration*100)):0;
  $('#mediaSeek').value=Math.round(progress*10);
