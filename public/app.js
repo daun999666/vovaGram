@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);
-const state={token:localStorage.getItem('vg_token'),user:null,chats:[],active:null,socket:null,theme:localStorage.getItem('vg_theme')||'blue',folder:'all',replyTo:null,ui:JSON.parse(localStorage.getItem('vg_ui')||'{}'),wallpaper:localStorage.getItem('vg_wallpaper')||'expressive',songs:[],currentSong:null,pendingImage:null,messageHasMore:false,loadingOlder:false,pins:[],onlineUsers:new Set(),typingTimer:null};
+const state={token:localStorage.getItem('vg_token'),user:null,chats:[],active:null,socket:null,theme:localStorage.getItem('vg_theme')||'blue',folder:'all',replyTo:null,ui:JSON.parse(localStorage.getItem('vg_ui')||'{}'),wallpaper:localStorage.getItem('vg_wallpaper')||'expressive',songs:[],currentSong:null,pendingImage:null,messageHasMore:false,loadingOlder:false,pins:[],onlineUsers:new Set(),typingTimer:null,draftTimer:null};
 const themes={blue:{primary:'#526da8',surface:'#f7f8ff',surface2:'#edf0fa',surface3:'#dfe5f5',bubble:'#e8edf9'},green:{primary:'#39765c',surface:'#f5faf6',surface2:'#e9f3ec',surface3:'#dcebe0',bubble:'#e4f1e7'},purple:{primary:'#72599d',surface:'#faf8ff',surface2:'#f0ebfa',surface3:'#e6def5',bubble:'#eee8f8'},rose:{primary:'#a45370',surface:'#fff8fa',surface2:'#f8edf1',surface3:'#f2dfe7',bubble:'#f8e8ee'},orange:{primary:'#946039',surface:'#fffaf5',surface2:'#f8efe5',surface3:'#f0e1d0',bubble:'#f5e9dc'},mono:{primary:'#555963',surface:'#f7f7f8',surface2:'#eeeeef',surface3:'#e2e3e5',bubble:'#e9e9eb'}};
 const fontFamilies={google:"'Roboto Flex',Roboto,Arial,sans-serif",roboto:"Roboto,Arial,sans-serif",inter:"Inter,'Roboto',sans-serif",system:"system-ui,-apple-system,'Segoe UI',sans-serif"};
 const emojiGroups={Часто:'😀 😃 😄 😁 😆 😅 😂 🙂 🙃 😉 😊 😍 🥰 😎 🤔 🥳 😭 😡 ❤️ 🧡 💛 💚 💙 💜 🤍 👍 👎 🙌 👏 🔥 ✨ 🎉 💯',Лица:'😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😋 😛 😜 🤪 😎 🤓 🧐 🤔 🤫 🤭 🫡 🤗 🫠 😐 😑 😶 🙄 😏 😣 😥 😮 🤐 😯 😪 😫 🥱 😴 😵 🤯 🥺 😢 😭 😤 😠 😡 🤬 🤒 🤕 🤧 🥵 🥶',Жесты:'👋 🤚 🖐️ ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🙏 💪 🦾',Символы:'❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 🔥 ✨ ⭐ 🌟 💫 ⚡ ☀️ 🌈 ☁️ ❄️ 🌙 ☕ 🍀 🎵 🎶 💯 ✅ ❌ ⚠️'};
@@ -76,6 +76,12 @@ function setWallpaper(value){
 }
 async function openChat(id){
  const c=state.chats.find(x=>x.id===id);if(!c)return;
+ const previousChatId=state.active?.id;
+ if(previousChatId&&previousChatId!==id){
+  clearTimeout(state.draftTimer);
+  persistChatDraft(previousChatId,$('#messageInput').value).catch(()=>{});
+ }
+ $('#messageInput').value='';
  state.active=c;state.replyTo=null;state.messageHasMore=false;state.pins=[];
  $('#replyBar').classList.add('hidden');$('#pinnedMessageBanner').classList.add('hidden');
  $('#welcome').classList.add('hidden');
@@ -88,7 +94,11 @@ async function openChat(id){
  renderChats();
  try{
   $('#messages').innerHTML='<div class="m3-chat-loading"><span class="m3-loading-indicator" role="progressbar" aria-label="Загрузка диалога"></span><span>Загружаю диалог…</span></div>';
-  const d=await api(`/api/chats/${id}/messages?limit=50`);
+  const [d,draftResponse]=await Promise.all([
+   api(`/api/chats/${id}/messages?limit=50`),
+   api(`/api/chats/${id}/draft`)
+  ]);
+  if(state.active?.id===id)$('#messageInput').value=draftResponse.draft?.body||'';
   $('#messages').innerHTML='';d.messages.forEach(m=>addMessage(m));
   state.messageHasMore=!!d.hasMore;updateLoadMoreButton();
   $('#messages').scrollTop=$('#messages').scrollHeight;
@@ -104,6 +114,17 @@ function updateLoadMoreButton(){
  button.innerHTML=state.loadingOlder
   ? '<span class="m3-loading-indicator" aria-hidden="true"></span>Загрузка…'
   : '<span class="material-symbols-rounded">keyboard_double_arrow_up</span>Загрузить предыдущие сообщения';
+}
+async function persistChatDraft(chatId,body){
+ if(!chatId)return;
+ const text=String(body||'').slice(0,4000);
+ await api('/api/chats/'+chatId+'/draft',{method:'PUT',body:JSON.stringify({body:text})});
+}
+function scheduleDraftSave(){
+ if(!state.active)return;
+ const chatId=state.active.id,body=$('#messageInput').value;
+ clearTimeout(state.draftTimer);
+ state.draftTimer=setTimeout(()=>persistChatDraft(chatId,body).catch(()=>{}),450);
 }
 async function markChatRead(chatId){
  try{await api(`/api/chats/${chatId}/read`,{method:'POST'});await loadChats()}catch(e){/* keep chat opening resilient if read marker fails */}
@@ -172,6 +193,28 @@ async function openMessageHistory(message){
   modal('История изменений','Предыдущие версии сообщения',entries||'<p class="empty">История изменений пока пуста</p>');
  }catch(e){toast(e.message)}
 }
+async function openHiddenMessages(){
+ try{
+  const d=await api('/api/hidden-messages');
+  const items=(d.messages||[]).map(m=>'<div class="m3-hidden-item"><span><b>'+esc(m.chat_title)+'</b><small>'+esc(m.body||'Вложение')+'</small></span><button class="soft-btn" data-restore-hidden="'+m.id+'" data-chat-id="'+m.chat_id+'">Вернуть</button></div>').join('');
+  const dialog=modal('Скрытые сообщения','Скрытие действует только в твоём аккаунте',items?'<div class="m3-hidden-list">'+items+'</div>':'<p class="empty">Скрытых сообщений нет</p>','<button class="soft-btn" data-close>Закрыть</button>');
+  dialog.querySelectorAll('[data-restore-hidden]').forEach(button=>button.onclick=async()=>{
+   try{
+    const id=Number(button.dataset.restoreHidden),chatId=Number(button.dataset.chatId);
+    await api('/api/messages/'+id+'/hide',{method:'DELETE'});
+    await openChat(chatId);closeModal();toast('Сообщение возвращено');
+   }catch(e){toast(e.message)}
+  });
+ }catch(e){toast(e.message)}
+}
+async function hideMessageForMe(message){
+ try{
+  await api('/api/messages/'+message.id+'/hide',{method:'POST'});
+  $('#msg-'+message.id)?.remove();
+  await loadChats();
+  toast('Сообщение скрыто только у тебя');
+ }catch(e){toast(e.message)}
+}
 async function openSavedMessages(){
  try{
   const d=await api('/api/saved');
@@ -207,6 +250,7 @@ function addMessage(m,{prepend=false}={}){
   '<button data-copy title="Копировать" aria-label="Копировать">'+m3Icon('content_copy')+'</button>'+
   '<button data-reply title="Ответить" aria-label="Ответить">'+m3Icon('reply')+'</button>'+
   '<button data-save title="В Избранное" aria-label="В Избранное">'+m3Icon('bookmark_add')+'</button>'+
+  '<button data-hide-me title="Удалить у меня" aria-label="Удалить у меня">'+m3Icon('visibility_off')+'</button>'+
   '<button data-forward title="Переслать" aria-label="Переслать">'+m3Icon('forward')+'</button>'+
   (m.edited_at?'<button data-history title="История изменений" aria-label="История изменений">'+m3Icon('history')+'</button>':'')+
   ((state.active?.type==='direct'||['owner','admin'].includes(state.active?.my_role)||['owner','dev'].includes(state.user?.role))?'<button data-pin data-pinned="'+(m.is_pinned?'true':'false')+'" title="'+(m.is_pinned?'Открепить':'Закрепить')+'" aria-label="Закрепить сообщение">'+m3Icon('push_pin')+'</button>':'')+
@@ -216,6 +260,7 @@ function addMessage(m,{prepend=false}={}){
  el.querySelector('[data-copy]').onclick=async()=>{try{await navigator.clipboard.writeText(m.body||'Изображение');toast('Скопировано')}catch{toast('Браузер запретил копирование')}};
  el.querySelector('[data-reply]').onclick=()=>setReply(m);
  el.querySelector('[data-save]').onclick=()=>saveMessage(m);
+ el.querySelector('[data-hide-me]').onclick=()=>hideMessageForMe(m);
  el.querySelector('[data-forward]').onclick=()=>forwardMessage(m);
  el.querySelector('[data-history]')?.addEventListener('click',()=>openMessageHistory(m));
  el.querySelector('[data-pin]').onclick=()=>togglePinMessage(m);
@@ -315,7 +360,27 @@ function uploadFile(file,kind){
 let pendingMessageFiles=[];
 function renderAttachmentPreview(){const box=$('#attachmentPreview');if(!box)return;box.innerHTML=pendingMessageFiles.map((f,i)=>`<div class="attachment-chip"><img src="${URL.createObjectURL(f)}" alt=""><span>${esc(f.name)}</span><button type="button" data-remove-attachment="${i}" aria-label="Убрать">×</button></div>`).join('');box.classList.toggle('hidden',!pendingMessageFiles.length);box.querySelectorAll('[data-remove-attachment]').forEach(b=>b.onclick=()=>{pendingMessageFiles.splice(+b.dataset.removeAttachment,1);renderAttachmentPreview()})}
 function addMessageFiles(files){for(const f of files){if(!f.type.startsWith('image/')){toast('Пока можно прикреплять изображения');continue}if(f.size>5*1024*1024){toast('Изображение должно быть до 5 МБ');continue}if(pendingMessageFiles.length>=4){toast('Максимум 4 изображения в одном сообщении');break}pendingMessageFiles.push(f)}renderAttachmentPreview()}
-async function sendCurrentMessage(){if(!state.active)return;const input=$('#messageInput'),body=input.value.trim();if(!body&&!pendingMessageFiles.length)return;const send=$('.send-btn');send.disabled=true;try{const attachments=[];for(const file of pendingMessageFiles){setTransferProgress(0,'Загрузка '+file.name);const up=await uploadFile(file,'image');attachments.push({url:up.url,mime:file.type,name:file.name})}const d=await api(`/api/chats/${state.active.id}/messages`,{method:'POST',body:JSON.stringify({body,replyTo:state.replyTo,attachments})});if(!state.socket?.connected)addMessage(d.message);input.value='';pendingMessageFiles=[];renderAttachmentPreview();hideTransferProgress();state.replyTo=null;$('#replyBar').classList.add('hidden');loadChats()}catch(err){hideTransferProgress();toast(err.message)}finally{send.disabled=false}}
+async function sendCurrentMessage(){
+ if(!state.active)return;
+ const input=$('#messageInput'),body=input.value.trim(),chatId=state.active.id;
+ if(!body&&!pendingMessageFiles.length)return;
+ const send=$('.send-btn');send.disabled=true;
+ try{
+  const attachments=[];
+  for(const file of pendingMessageFiles){
+   setTransferProgress(0,'Загрузка '+file.name);
+   const up=await uploadFile(file,'image');
+   attachments.push({url:up.url,mime:file.type,name:file.name});
+  }
+  const d=await api(`/api/chats/${chatId}/messages`,{method:'POST',body:JSON.stringify({body,replyTo:state.replyTo,attachments})});
+  if(!state.socket?.connected)addMessage(d.message);
+  input.value='';clearTimeout(state.draftTimer);
+  await api('/api/chats/'+chatId+'/draft',{method:'DELETE'}).catch(()=>{});
+  pendingMessageFiles=[];renderAttachmentPreview();hideTransferProgress();
+  state.replyTo=null;$('#replyBar').classList.add('hidden');loadChats();
+ }catch(err){hideTransferProgress();toast(err.message)}
+ finally{send.disabled=false}
+}
 function openEmoji(){const box=$('#emojiPicker');box.classList.toggle('hidden');box.innerHTML=`<input id="emojiSearch" placeholder="Найти эмодзи"><div class="emoji-tabs">${Object.keys(emojiGroups).map((x,i)=>`<button data-group="${x}" class="${i===0?'active':''}">${x}</button>`).join('')}</div><div class="emoji-grid" id="emojiGrid"></div>`;function draw(group='Часто',query=''){const all=Object.values(emojiGroups).join(' ').split(/\s+/).filter(x=>x);const list=query?all.filter(x=>x.includes(query)):emojiGroups[group].split(' ');$('#emojiGrid').innerHTML=[...new Set(list)].map(x=>`<button>${x}</button>`).join('');$('#emojiGrid').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#messageInput').value+=$('#messageInput').value?' '+b.textContent:b.textContent;$('#messageInput').focus();box.classList.add('hidden')})}draw();box.querySelectorAll('[data-group]').forEach(b=>b.onclick=()=>{box.querySelectorAll('[data-group]').forEach(x=>x.classList.remove('active'));b.classList.add('active');draw(b.dataset.group)});$('#emojiSearch').oninput=e=>draw('Часто',e.target.value.trim())}
 async function chatDetails(c){
  const canEdit=['owner','admin'].includes(c.my_role)||['owner','dev'].includes(state.user.role);
@@ -485,13 +550,15 @@ document.addEventListener('click',e=>{if(!e.target.closest('.m3-fab-stack')){$('
 $('#messageFilePicker').onchange=e=>{addMessageFiles([...e.target.files]);e.target.value=''};
 let typingStopTimer=null;
 $('#messageInput').addEventListener('input',()=>{
- if(!state.active||!state.socket?.connected)return;
+ if(!state.active)return;
+ scheduleDraftSave();
+ if(!state.socket?.connected)return;
  const typingChatId=state.active.id;
  state.socket.emit('typing',{chatId:typingChatId,typing:true});
  clearTimeout(typingStopTimer);
  typingStopTimer=setTimeout(()=>state.socket?.emit('typing',{chatId:typingChatId,typing:false}),1300);
 });$('#sendForm').onsubmit=async e=>{e.preventDefault();await sendCurrentMessage()};document.addEventListener('paste',e=>{if(!state.active)return;const items=[...(e.clipboardData?.items||[])];const images=items.filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(images.length){e.preventDefault();addMessageFiles(images)}});
-$('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='saved')openSavedMessages();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b))});const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}});
+$('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='saved')openSavedMessages();else if(action==='hidden')openHiddenMessages();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b))});const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}});
 
 function installMaterialIconFont(){
  const glyphs=[['☰','menu'],['⌕','search'],['＋','add'],['⚙','settings'],['♫','music_note'],['☾','dark_mode'],['◉','account_circle'],['♧','group_add'],['◈','campaign'],['☺','sentiment_satisfied'],['➤','send'],['▢','content_copy'],['↩','reply'],['✎','edit'],['×','close'],['▶','play_arrow'],['Ⅱ','pause'],['↶','skip_previous'],['↷','skip_next'],['☆','star'],['★','star'],['⌖','push_pin'],['➦','forward'],['🔔','notifications'],['🔕','notifications_off']];
