@@ -266,7 +266,7 @@ function addMessage(m,{prepend=false}={}){
  el.querySelector('[data-hide-me]').onclick=()=>hideMessageForMe(m);
  el.querySelector('[data-forward]').onclick=()=>forwardMessage(m);
  el.querySelector('[data-history]')?.addEventListener('click',()=>openMessageHistory(m));
- el.querySelector('[data-pin]').onclick=()=>togglePinMessage(m);
+ el.querySelector('[data-pin]')?.addEventListener('click',()=>togglePinMessage(m));
  el.querySelector('[data-react-open]').onclick=()=>quickReact(m);
  el.querySelector('[data-edit]')?.addEventListener('click',()=>editMessage(m));
  el.querySelector('[data-delete]')?.addEventListener('click',()=>deleteMessage(m));
