@@ -69,6 +69,12 @@ CREATE TABLE IF NOT EXISTS songs (id INTEGER PRIMARY KEY AUTOINCREMENT,user_id I
 CREATE TABLE IF NOT EXISTS chat_reads (chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_read_message_id INTEGER NOT NULL DEFAULT 0,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,user_id));
 CREATE TABLE IF NOT EXISTS chat_pins (chat_id INTEGER NOT NULL,message_id INTEGER NOT NULL,pinned_by INTEGER NOT NULL,pinned_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,message_id));
 CREATE TABLE IF NOT EXISTS saved_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,saved_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
+CREATE TRIGGER IF NOT EXISTS cleanup_deleted_message_references
+AFTER DELETE ON messages
+BEGIN
+  DELETE FROM chat_pins WHERE message_id=OLD.id;
+  DELETE FROM saved_messages WHERE message_id=OLD.id;
+END;
 `);
 function ensureColumn(table, column, definition) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(x=>x.name);
@@ -519,6 +525,17 @@ app.get("/download/vovchikgram-win.exe",(req,res)=>{
 app.get("*",(req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
 
 const onlineUsers=new Map();
+function sharedUserIds(userId){
+  return q(`SELECT DISTINCT other.user_id AS user_id
+    FROM members mine JOIN members other ON other.chat_id=mine.chat_id
+    WHERE mine.user_id=? AND other.user_id<>?`).all(userId,userId).map(row=>row.user_id);
+}
+function emitPresenceToSharedUsers(userId,online){
+  const peers=new Set(sharedUserIds(userId));
+  for(const [socketId,connectedUserId] of onlineUsers){
+    if(peers.has(connectedUserId)) io.to(socketId).emit("presence-update",{userId,online});
+  }
+}
 io.use((socket,next)=>{
   try {
     const payload=jwt.verify(socket.handshake.auth?.token,SECRET);
@@ -531,8 +548,10 @@ io.on("connection",(socket)=>{
   const userId=socket.user.id;
   const alreadyOnline=[...onlineUsers.values()].includes(userId);
   onlineUsers.set(socket.id,userId);
-  socket.emit("presence-snapshot",{userIds:[...new Set(onlineUsers.values())]});
-  if(!alreadyOnline) socket.broadcast.emit("presence-update",{userId,online:true});
+  const visible=new Set(sharedUserIds(userId));
+  const visibleOnline=[...new Set([...onlineUsers.values()].filter(id=>visible.has(id)))];
+  socket.emit("presence-snapshot",{userIds:visibleOnline});
+  if(!alreadyOnline) emitPresenceToSharedUsers(userId,true);
   socket.on("join-chat",(id)=>{
     id=Number(id);
     if(Number.isSafeInteger(id)&&id>0&&q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,userId)) socket.join("chat:"+id);
@@ -545,7 +564,7 @@ io.on("connection",(socket)=>{
   });
   socket.on("disconnect",()=>{
     onlineUsers.delete(socket.id);
-    if(![...onlineUsers.values()].includes(userId)) io.emit("presence-update",{userId,online:false});
+    if(![...onlineUsers.values()].includes(userId)) emitPresenceToSharedUsers(userId,false);
   });
 });
 server.listen(PORT,"0.0.0.0",()=>{
