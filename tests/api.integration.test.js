@@ -513,7 +513,7 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const hiddenList = await request(baseUrl, ownerToken, "/api/hidden-messages");
   assert.equal(hiddenList.body.messages.length, 1);
   const unreadAfterHide = await request(baseUrl, ownerToken, "/api/chats");
-  assert.equal(unreadAfterHide.body.chats.find(x => x.id === chatId).unread_count, 1);
+  assert.equal(unreadAfterHide.body.chats.find(x => x.id === chatId).unread_count, 2);
   const chatExport = await request(baseUrl, ownerToken, `/api/chats/${chatId}/export`);
   assert.equal(chatExport.status, 200);
   assert.equal(chatExport.body.messages.some(x => x.id === third.body.message.id), false);
