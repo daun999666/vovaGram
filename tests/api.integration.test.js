@@ -212,6 +212,28 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(approvedJoinRequest.status, 200);
   const guestNowMember = await request(baseUrl, guestToken, `/api/chats/${chatId}/messages`);
   assert.equal(guestNowMember.status, 200);
+  const slowModeEnabled = await request(baseUrl, ownerToken, `/api/chats/${chatId}`, {
+    method: "PATCH", body: JSON.stringify({ title: "v2 integration", description: "", avatar: "", wallpaper: "", slowModeSeconds: 5 })
+  });
+  assert.equal(slowModeEnabled.status, 200);
+  assert.equal(slowModeEnabled.body.chat.slow_mode_seconds, 5);
+  const firstSlowModeMessage = await request(baseUrl, guestToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "slow mode first message" })
+  });
+  assert.equal(firstSlowModeMessage.status, 200);
+  const blockedBySlowMode = await request(baseUrl, guestToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "slow mode too soon" })
+  });
+  assert.equal(blockedBySlowMode.status, 429);
+  assert.ok(blockedBySlowMode.body.retryAfter > 0);
+  const adminExemptFromSlowMode = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "admin bypasses slow mode" })
+  });
+  assert.equal(adminExemptFromSlowMode.status, 200);
+  const invalidSlowMode = await request(baseUrl, ownerToken, `/api/chats/${chatId}`, {
+    method: "PATCH", body: JSON.stringify({ title: "v2 integration", description: "", avatar: "", wallpaper: "", slowModeSeconds: 7 })
+  });
+  assert.equal(invalidSlowMode.status, 400);
   const handledJoinRequests = await request(baseUrl, ownerToken, `/api/chats/${chatId}/join-requests`);
   assert.equal(handledJoinRequests.body.requests.length, 0);
 
