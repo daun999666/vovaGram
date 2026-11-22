@@ -1094,6 +1094,22 @@ app.post("/api/messages/:id/forward",auth,(req,res)=>{
   io.to("chat:"+targetChatId).emit("message",message);
   res.json({message});
 });
+app.post("/api/chats/:id/messages/bulk-delete",auth,(req,res)=>{
+  const chatId=Number(req.params.id),raw=Array.isArray(req.body.ids)?req.body.ids:[];
+  if(!Number.isSafeInteger(chatId)||chatId<1) return res.status(400).json({error:"Некорректный ID чата"});
+  if(!raw.length||raw.length>100) return res.status(400).json({error:"Выбери от 1 до 100 сообщений"});
+  const ids=[...new Set(raw.map(Number))];
+  if(ids.length!==raw.length||ids.some(id=>!Number.isSafeInteger(id)||id<1)) return res.status(400).json({error:"Некорректный список сообщений"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id)) return res.status(403).json({error:"Нет доступа к чату"});
+  const placeholders=ids.map(()=>"?").join(",");
+  const messages=q("SELECT id,user_id FROM messages WHERE chat_id=? AND id IN ("+placeholders+")").all(chatId,...ids);
+  if(messages.length!==ids.length) return res.status(404).json({error:"Одно или несколько сообщений не найдены в этом чате"});
+  if(!["owner","dev"].includes(req.user.role)&&messages.some(message=>message.user_id!==req.user.id))
+    return res.status(403).json({error:"Можно удалять только свои сообщения"});
+  db.transaction(()=>q("DELETE FROM messages WHERE chat_id=? AND id IN ("+placeholders+")").run(chatId,...ids))();
+  for(const id of ids)io.to("chat:"+chatId).emit("message-deleted",{id,chat_id:chatId});
+  res.json({ok:true,deleted:ids});
+});
 app.delete("/api/messages/:id",auth,(req,res)=>{
   const id=Number(req.params.id), m=q("SELECT * FROM messages WHERE id=?").get(id);
   if(!m) return res.status(404).json({error:"Сообщение не найдено"});
@@ -1161,16 +1177,18 @@ app.post("/api/upload",auth,(req,res)=>{
   const data=String(req.body.data||""),kind=String(req.body.kind||"");
   const match=data.match(/^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=]+)$/i);
   if(!match) return res.status(400).json({error:"Некорректный файл"});
-  const mime=match[1].toLowerCase();
+  let mime=match[1].toLowerCase();
+  const buffer=Buffer.from(match[2],"base64");
+  if(kind==="audio"&&mime==="application/octet-stream"&&buffer.subarray(4,8).toString()==="ftyp")mime="audio/mp4";
+  if(kind==="audio"&&mime==="audio/m4a")mime="audio/mp4";
   const allowed=kind==="audio"
-    ? /^audio\/(mpeg|ogg|wav|mp4|x-m4a|x-wav|aac|flac|webm)$/
+    ? /^audio\/(mpeg|ogg|wav|mp4|m4a|x-m4a|x-wav|aac|flac|webm)$/
     : kind==="image"
       ? /^image\/(png|jpeg|webp|gif)$/
       : kind==="file"
         ? /^(application\/(pdf|zip|vnd\.openxmlformats-officedocument\.wordprocessingml\.document)|text\/plain|video\/(mp4|webm))$/
         : null;
   if(!allowed||!allowed.test(mime)) return res.status(415).json({error:"Этот формат файла не поддерживается"});
-  const buffer=Buffer.from(match[2],"base64");
   const limit=kind==="audio"?15*1024*1024:kind==="image"?5*1024*1024:20*1024*1024;
   if(!buffer.length||buffer.length>limit) return res.status(413).json({error:kind==="audio"?"Аудио должно быть до 15 МБ":kind==="image"?"Изображение должно быть до 5 МБ":"Файл должен быть до 20 МБ"});
   const isZip=()=>buffer.length>=4&&buffer[0]===0x50&&buffer[1]===0x4b&&[0x03,0x05,0x07].includes(buffer[2])&&[0x04,0x06,0x08].includes(buffer[3]);
@@ -1183,6 +1201,7 @@ app.post("/api/upload",auth,(req,res)=>{
     "audio/wav":()=>buffer.subarray(0,4).toString()==="RIFF"&&buffer.subarray(8,12).toString()==="WAVE",
     "audio/x-wav":()=>buffer.subarray(0,4).toString()==="RIFF"&&buffer.subarray(8,12).toString()==="WAVE",
     "audio/x-m4a":()=>buffer.subarray(4,8).toString()==="ftyp",
+    "audio/m4a":()=>buffer.subarray(4,8).toString()==="ftyp",
     "audio/flac":()=>buffer.subarray(0,4).toString()==="fLaC",
     "audio/mp4":()=>buffer.subarray(4,8).toString()==="ftyp",
     "audio/mpeg":()=>buffer.subarray(0,3).toString()==="ID3"||(buffer[0]===0xff&&(buffer[1]&0xe0)===0xe0),
@@ -1197,7 +1216,7 @@ app.post("/api/upload",auth,(req,res)=>{
   };
   if(!signatures[mime]||!signatures[mime]()) return res.status(415).json({error:"Содержимое файла не соответствует его формату"});
   const ext={
-    "audio/mpeg":"mp3","audio/ogg":"ogg","audio/wav":"wav","audio/x-wav":"wav","audio/mp4":"m4a","audio/x-m4a":"m4a","audio/aac":"aac","audio/flac":"flac","audio/webm":"weba",
+    "audio/mpeg":"mp3","audio/ogg":"ogg","audio/wav":"wav","audio/x-wav":"wav","audio/mp4":"m4a","audio/x-m4a":"m4a","audio/m4a":"m4a","audio/aac":"aac","audio/flac":"flac","audio/webm":"weba",
     "image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif",
     "application/pdf":"pdf","text/plain":"txt","application/zip":"zip",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document":"docx",
