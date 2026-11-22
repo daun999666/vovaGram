@@ -236,7 +236,7 @@ function addMessage(m,{prepend=false}={}){
  const forwardCount=Number(m.forward_count)>0?'<span class="message-forward-count" title="Количество пересылок"><span class="material-symbols-rounded">forward</span>'+Number(m.forward_count)+'</span>':'';
 
  let reactions={};try{reactions=JSON.parse(m.reactions||'{}')}catch{}
- const react=Object.entries(reactions).filter(([,ids])=>Array.isArray(ids)&&ids.length).map(([emo,ids])=>'<button class="reaction" data-react="'+esc(emo)+'">'+esc(emo)+' '+ids.length+'</button>').join('');
+ const react=Object.entries(reactions).filter(([,ids])=>Array.isArray(ids)&&ids.length).map(([emo,ids])=>'<span class="reaction-entry"><button class="reaction" data-react="'+esc(emo)+'">'+esc(emo)+' '+ids.length+'</button><button class="reaction-users" data-react-users="'+esc(emo)+'" title="Кто поставил реакцию" aria-label="Кто поставил реакцию">'+m3Icon('groups')+'</button></span>').join('');
  let attachments=[];try{attachments=JSON.parse(m.attachments||'[]')}catch{}
  const media=attachments.map(a=>'<a class="message-image-link" href="'+esc(a.url)+'" target="_blank" rel="noopener"><img class="message-image" src="'+esc(a.url)+'" alt="'+esc(a.name||'Изображение')+'" loading="lazy"></a>').join('');
  const date=m.created_at?new Date(String(m.created_at).replace(' ','T')+'Z'):new Date();
@@ -270,11 +270,19 @@ function addMessage(m,{prepend=false}={}){
  el.querySelector('[data-edit]')?.addEventListener('click',()=>editMessage(m));
  el.querySelector('[data-delete]')?.addEventListener('click',()=>deleteMessage(m));
  el.querySelectorAll('[data-react]').forEach(b=>b.onclick=()=>reactMessage(m.id,b.dataset.react));
+ el.querySelectorAll('[data-react-users]').forEach(b=>b.onclick=()=>openReactionUsers(m.id,b.dataset.react));
  if(prepend){const first=$('#messages').querySelector('.message');if(first)$('#messages').insertBefore(el,first);else $('#messages').append(el)}else{$('#messages').append(el);$('#messages').scrollTop=$('#messages').scrollHeight;}
 }
 function setReply(m){state.replyTo=m.id;$('#replyBar').innerHTML=`<span>Ответ на <b>@${esc(m.username)}</b>: ${esc(m.body.slice(0,90))}</span><button id="cancelReply">×</button>`;$('#replyBar').classList.remove('hidden');$('#cancelReply').onclick=()=>{state.replyTo=null;$('#replyBar').classList.add('hidden')};$('#messageInput').focus()}
 async function editMessage(m){const text=prompt('Изменить сообщение:',m.body);if(text===null||!text.trim())return;try{await api('/api/messages/'+m.id,{method:'PATCH',body:JSON.stringify({body:text})})}catch(e){toast(e.message)}}
 async function deleteMessage(m){if(!confirm('Удалить сообщение?'))return;try{await api('/api/messages/'+m.id,{method:'DELETE'})}catch(e){toast(e.message)}}
+async function openReactionUsers(messageId,emoji){
+ try{
+  const result=await api('/api/messages/'+messageId+'/reactions?emoji='+encodeURIComponent(emoji));
+  const rows=(result.users||[]).map(user=>'<div class="m3-reaction-user">'+avatar(user.avatar,user.display_name,'result-avatar')+'<span><b>'+esc(user.display_name)+'</b><small>@'+esc(user.username)+'</small></span></div>').join('');
+  modal('Реакция '+emoji,(result.users||[]).length+' участников поставили эту реакцию',rows?'<div class="m3-reaction-users">'+rows+'</div>':'<p class="empty">Пока никто не поставил эту реакцию</p>');
+ }catch(e){toast(e.message)}
+}
 async function reactMessage(id,emoji){try{await api('/api/messages/'+id+'/reaction',{method:'POST',body:JSON.stringify({emoji})})}catch(e){toast(e.message)}}
 function quickReact(m){const options=['👍','❤️','😂','🔥','😮','👏','😢'];const v=prompt('Выбери реакцию:\n'+options.join(' '),'👍');if(v&&[...options,'🎉','😍','💯'].includes(v.trim()))reactMessage(m.id,v.trim())}
 async function createChat(defaultType='group'){
