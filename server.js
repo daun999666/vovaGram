@@ -509,7 +509,6 @@ app.get("/api/channels/by-username/:username",auth,(req,res)=>{
 });
 app.get("/api/channels",auth,(req,res)=>{
   const search=String(req.query.q||"").trim().replace(/^@/,"").slice(0,64);
-  const like="%"+search+"%";
   const channels=q(`SELECT c.id,c.title,c.description,c.avatar,c.username,c.created_at,
     (SELECT COUNT(*) FROM members m WHERE m.chat_id=c.id) AS member_count
     FROM chats c WHERE c.type='channel' AND c.username IS NOT NULL AND c.username<>'' 
