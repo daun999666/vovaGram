@@ -539,7 +539,7 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
   if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
   const before=boundedInteger(req.query.before,0,0,Number.MAX_SAFE_INTEGER);
   const limit=boundedInteger(req.query.limit,50,1,100);
-  const select=`SELECT m.id,m.chat_id,m.user_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+  const select=`SELECT m.id,m.chat_id,m.user_id AS internal_sender_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
     m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
     (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
     CASE WHEN m.sender_as_channel=1 THEN NULL ELSE u.username END AS username,
@@ -556,10 +556,10 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
     ? q(select+" AND m.id<? ORDER BY m.id DESC LIMIT ?").all(req.user.id,id,req.user.id,before,limit+1)
     : q(select+" ORDER BY m.id DESC LIMIT ?").all(req.user.id,id,req.user.id,limit+1);
   if(q("SELECT type FROM chats WHERE id=?").get(id)?.type==="channel"){
-    const viewed=rows.filter(message=>message.user_id!==req.user.id).map(message=>message.id);
+    const viewed=rows.filter(message=>message.internal_sender_id!==req.user.id).map(message=>message.id);
     const markView=q("INSERT OR IGNORE INTO channel_post_views(message_id,user_id) VALUES(?,?)");
     for(const messageId of viewed)markView.run(messageId,req.user.id);
-    for(const message of rows)message.view_count=q("SELECT COUNT(*) AS n FROM channel_post_views WHERE message_id=?").get(message.id).n;
+    for(const message of rows){message.view_count=q("SELECT COUNT(*) AS n FROM channel_post_views WHERE message_id=?").get(message.id).n;delete message.internal_sender_id;}
   }
   const hasMore=rows.length>limit;
   const messages=rows.slice(0,limit).reverse();
