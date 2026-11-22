@@ -1,4 +1,54 @@
-# vovchikGram — main · Material 3 Expressive
+# vovchikGram 2.0 — development branch
+
+> **Status:** development release, not yet merged into `main`. The 250-item roadmap is a delivery plan, not a claim that all 250 features are complete.
+
+## Verified 2.0 features in this branch
+
+- Cursor-based message history (50-message pages), preserving scroll position while older messages load.
+- Per-chat unread counters and server-side read cursors.
+- Server-backed multiple pins and Saved Messages.
+- Server-backed chat favourites and archive state.
+- Search across people, chats and message text, restricted to chats the signed-in user can access.
+- Message forwarding with source author/chat metadata.
+- Edit history: previous message text is retained and visible to chat members.
+- Real-time typing state and presence updates scoped to shared chats.
+- Per-chat server drafts.
+- Hide a message only for the current account, with a restore list; other participants continue to see it.
+- Material 3 Expressive wavy progress indicators using the upstream `material@3.16.0` web component.
+
+## Build and verify
+
+Requires Node.js 22 LTS.
+
+```cmd
+npm install
+copy .env.example .env
+```
+
+Set private values in `.env`, then run:
+
+```cmd
+npm run check
+npm start
+```
+
+Open http://localhost:8787.
+
+The CI workflow runs JavaScript syntax checks, Node integration/unit tests and a Windows x64 EXE packaging job on every push to `v2.0.0-dev`.
+
+- [2.0 roadmap — 100 main + 150 secondary items](docs/2.0/ROADMAP.md)
+- [Architecture and delivery notes](docs/2.0/ARCHITECTURE.md)
+- [Third-party licenses and notices](THIRD_PARTY_NOTICES.md)
+- [Latest v2 Windows build and CI results](https://github.com/daun999666/vovaGram/actions)
+
+For this branch's source ZIP:
+https://github.com/daun999666/vovaGram/archive/refs/heads/v2.0.0-dev.zip
+
+When updating an existing installation, keep your own `.env` and `data/` folder. Stop the server before copying database files.
+
+---
+
+# Legacy main branch documentation — vovchikGram 1.x
 
 Material You messenger for desktop browsers and mobile PWA. Server: Node.js + Express + Socket.IO + SQLite. The desktop EXE is packaged with `@yao-pkg/pkg`; Electron is not used.
 
