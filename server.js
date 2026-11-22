@@ -8,7 +8,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 const { Server } = require("socket.io");
-const { exec } = require("child_process");
+const { spawn } = require("child_process");
 
 // Tiny .env loader so the project does not need an extra runtime dependency.
 const envCandidates = process.pkg
@@ -452,7 +452,22 @@ server.listen(PORT,"0.0.0.0",()=>{
   console.log(`vovchikGram запущен: http://localhost:${PORT}`);
   console.log(`Локальная сеть: http://<IP-ВАШЕГО-ПК>:${PORT}`);
   if(process.pkg && process.env.NO_BROWSER!=="1"){
-    const cmd=process.platform==="win32" ? `start "" "http://localhost:${PORT}"` : process.platform==="darwin" ? `open http://localhost:${PORT}` : `xdg-open http://localhost:${PORT}`;
-    exec(cmd,()=>{});
+    if(process.platform==="win32"){
+      const candidates=[
+        path.join(process.env["ProgramFiles(x86)"]||"C:\\Program Files (x86)","Microsoft","Edge","Application","msedge.exe"),
+        path.join(process.env.ProgramFiles||"C:\\Program Files","Microsoft","Edge","Application","msedge.exe"),
+        path.join(process.env.LOCALAPPDATA||"","Microsoft","Edge","Application","msedge.exe"),
+        ...String(process.env.PATH||"").split(path.delimiter).map(dir=>path.join(dir,"msedge.exe"))
+      ];
+      const edge=candidates.find(candidate=>fs.existsSync(candidate));
+      if(edge){
+        const child=spawn(edge,["--new-window","http://127.0.0.1:"+PORT],{detached:true,stdio:"ignore",windowsHide:true});
+        child.unref();
+      } else console.warn("Microsoft Edge (msedge.exe) not found. Open http://127.0.0.1:"+PORT+" manually.");
+    } else {
+      const opener=process.platform==="darwin"?"open":"xdg-open";
+      const child=spawn(opener,["http://127.0.0.1:"+PORT],{detached:true,stdio:"ignore"});
+      child.unref();
+    }
   }
 });
