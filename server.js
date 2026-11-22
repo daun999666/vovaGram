@@ -81,6 +81,24 @@ BEGIN
   DELETE FROM message_edits WHERE message_id=OLD.id;
   DELETE FROM hidden_messages WHERE message_id=OLD.id;
 END;
+CREATE TRIGGER IF NOT EXISTS cleanup_departed_member_chat_state
+AFTER DELETE ON members
+BEGIN
+  DELETE FROM chat_reads WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id;
+  DELETE FROM chat_drafts WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id;
+  DELETE FROM chat_preferences WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id;
+  DELETE FROM hidden_messages
+    WHERE user_id=OLD.user_id
+      AND message_id IN (SELECT id FROM messages WHERE chat_id=OLD.chat_id);
+END;
+CREATE TRIGGER IF NOT EXISTS cleanup_deleted_chat_state
+AFTER DELETE ON chats
+BEGIN
+  DELETE FROM chat_reads WHERE chat_id=OLD.id;
+  DELETE FROM chat_pins WHERE chat_id=OLD.id;
+  DELETE FROM chat_drafts WHERE chat_id=OLD.id;
+  DELETE FROM chat_preferences WHERE chat_id=OLD.id;
+END;
 `);
 function ensureColumn(table, column, definition) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(x=>x.name);
@@ -399,7 +417,9 @@ app.delete("/api/chats/:id/pins/:messageId",auth,(req,res)=>{
 app.get("/api/saved",auth,(req,res)=>{
   const messages=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,u.username,u.display_name,u.avatar,c.title AS chat_title,s.saved_at
     FROM saved_messages s JOIN messages m ON m.id=s.message_id JOIN users u ON u.id=m.user_id
-    JOIN chats c ON c.id=m.chat_id WHERE s.user_id=? ORDER BY s.saved_at DESC LIMIT 500`).all(req.user.id);
+    JOIN chats c ON c.id=m.chat_id WHERE s.user_id=?
+      AND NOT EXISTS(SELECT 1 FROM hidden_messages hm WHERE hm.user_id=s.user_id AND hm.message_id=m.id)
+    ORDER BY s.saved_at DESC LIMIT 500`).all(req.user.id);
   res.json({messages});
 });
 app.post("/api/messages/:id/save",auth,(req,res)=>{
