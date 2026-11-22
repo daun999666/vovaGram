@@ -312,8 +312,9 @@ app.post("/api/account/password",auth,(req,res)=>{
   const currentPassword=String(req.body.currentPassword||"");
   const newPassword=String(req.body.newPassword||"");
   if(newPassword.length<8||newPassword.length>128) return res.status(400).json({error:"Новый пароль должен содержать от 8 до 128 символов"});
-  if(!bcrypt.compareSync(currentPassword,req.user.password_hash)) return res.status(403).json({error:"Текущий пароль указан неверно"});
-  if(bcrypt.compareSync(newPassword,req.user.password_hash)) return res.status(400).json({error:"Новый пароль должен отличаться от текущего"});
+  const storedPassword=q("SELECT password_hash FROM users WHERE id=?").get(req.user.id)?.password_hash;
+  if(!storedPassword||!bcrypt.compareSync(currentPassword,storedPassword)) return res.status(403).json({error:"Текущий пароль указан неверно"});
+  if(bcrypt.compareSync(newPassword,storedPassword)) return res.status(400).json({error:"Новый пароль должен отличаться от текущего"});
   const hash=bcrypt.hashSync(newPassword,10);
   db.transaction(()=>{
     q("UPDATE users SET password_hash=? WHERE id=?").run(hash,req.user.id);
