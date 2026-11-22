@@ -714,7 +714,7 @@ app.post("/api/messages/:id/forward",auth,(req,res)=>{
     return res.status(403).json({error:"Публиковать в канале могут только администраторы"});
   let attachments=[];
   try{attachments=JSON.parse(source.attachments||"[]")}catch{}
-  const validAttachments=Array.isArray(attachments)?attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"image")):[];
+  const validAttachments=Array.isArray(attachments)?attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"attachment")).map(a=>({url:a.url,mime:String(a.mime||"").slice(0,80),name:String(a.name||"attachment").slice(0,120),size:Math.max(0,Math.min(25*1024*1024,Number(a.size)||0))})):[];
   const body=sanitizeMessageBody(source.body,4000);
   if(!body&&!validAttachments.length) return res.status(400).json({error:"Нечего пересылать"});
   const info=q(`INSERT INTO messages(chat_id,user_id,body,attachments,forwarded_from_message_id,forwarded_from_user_id,forwarded_from_name,forwarded_from_chat_id,forwarded_from_chat_title)
@@ -978,7 +978,7 @@ function processScheduledMessages(){
         }
         let attachments=[];
         try{attachments=JSON.parse(row.attachments||"[]")}catch{}
-        const validAttachments=Array.isArray(attachments)?attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"image")):[];
+        const validAttachments=Array.isArray(attachments)?attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"attachment")):[];
         const info=q("INSERT INTO messages(chat_id,user_id,body,attachments) VALUES(?,?,?,?)")
           .run(row.chat_id,row.user_id,row.body,JSON.stringify(validAttachments));
         const message=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
