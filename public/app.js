@@ -535,7 +535,7 @@ async function sendCurrentMessage(){
   }
   const d=await api(`/api/chats/${chatId}/messages`,{method:'POST',body:JSON.stringify({body,replyTo:state.replyTo,attachments})});
   if(!state.socket?.connected)addMessage(d.message);
-  input.value='';clearTimeout(state.draftTimer);
+  input.value='';input.style.height='auto';clearTimeout(state.draftTimer);
   await api('/api/chats/'+chatId+'/draft',{method:'DELETE'}).catch(()=>{});
   pendingMessageFiles=[];renderAttachmentPreview();hideTransferProgress();
   state.replyTo=null;$('#replyBar').classList.add('hidden');loadChats();
@@ -642,7 +642,8 @@ function settings(){
  <label class="field"><span>Скругление сообщений <b id="radiusLabel">${state.ui.bubbleRadius||20}px</b></span><input id="bubbleRadius" type="range" min="8" max="32" value="${state.ui.bubbleRadius||20}"></label>
  <label class="field"><span>Расстояние между сообщениями <b id="gapLabel">${state.ui.chatGap||10}px</b></span><input id="chatGap" type="range" min="4" max="24" value="${state.ui.chatGap||10}"></label>
  <label class="field"><span>Плотность списка</span><select id="density"><option value="normal">Обычная</option><option value="compact" ${state.ui.density==='compact'?'selected':''}>Компактная</option></select></label>
- <label class="toggle"><input id="darkMode" type="checkbox" ${state.ui.dark?'checked':''}> Тёмная тема</label></div>
+ <label class="toggle"><input id="darkMode" type="checkbox" ${state.ui.dark?'checked':''}> Тёмная тема</label>
+ <label class="toggle"><input id="sendOnEnter" type="checkbox" ${state.ui.sendOnEnter!==false?'checked':''}> Отправлять по Enter <small class="muted">Shift+Enter — новая строка</small></label></div>
  <div class="settings-section"><h3>Профиль</h3><div class="profile-edit-head">${avatar(state.user.avatar,state.user.displayName,'edit-avatar')}<label class="soft-btn upload-label">Изменить фото<input id="avatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden></label></div>
  <label class="field"><span>Имя</span><input id="pName" value="${esc(state.user.displayName)}" maxlength="40"></label><label class="field"><span>Описание</span><textarea id="pBio" maxlength="160">${esc(state.user.bio||'')}</textarea></label>
  <div class="profile-number-card"><small>Твой номер vovchikGram</small><b>${esc(state.user.number||'—')}</b><span>${state.user.verified?'✓ Подтверждённый аккаунт':'Идентификатор аккаунта'}</span></div>
@@ -663,6 +664,7 @@ function settings(){
  $('#fontFamily').onchange=e=>{state.ui.fontFamily=e.target.value;applyUI();saveUI()};
  $('#density').onchange=e=>{state.ui.density=e.target.value;applyUI();saveUI()};
  $('#darkMode').onchange=e=>{state.ui.dark=e.target.checked;applyUI();saveUI();$('#drawerThemeState').textContent=state.ui.dark?'Вкл.':'Выкл.'};
+ $('#sendOnEnter').onchange=e=>{state.ui.sendOnEnter=e.target.checked;saveUI()};
  async function loadAccountSessions(){
   const box=$('#activeSessions');if(!box)return;
   try{
@@ -831,6 +833,9 @@ document.addEventListener('click',e=>{if(!e.target.closest('.m3-fab-stack')){$('
 $('#messageFilePicker').onchange=e=>{addMessageFiles([...e.target.files]);e.target.value=''};
 let typingStopTimer=null;
 $('#messageInput').addEventListener('input',()=>{
+ const messageInput=$('#messageInput');
+ messageInput.style.height='auto';
+ messageInput.style.height=Math.min(messageInput.scrollHeight,140)+'px';
  if(!state.active)return;
  scheduleDraftSave();
  if(!state.socket?.connected)return;
@@ -838,7 +843,12 @@ $('#messageInput').addEventListener('input',()=>{
  state.socket.emit('typing',{chatId:typingChatId,typing:true});
  clearTimeout(typingStopTimer);
  typingStopTimer=setTimeout(()=>state.socket?.emit('typing',{chatId:typingChatId,typing:false}),1300);
-});$('#sendForm').onsubmit=async e=>{e.preventDefault();await sendCurrentMessage()};document.addEventListener('paste',e=>{if(!state.active)return;const items=[...(e.clipboardData?.items||[])];const images=items.filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(images.length){e.preventDefault();addMessageFiles(images)}});
+});
+$('#messageInput').addEventListener('keydown',e=>{
+ const action=window.VGMessageKeyboard?.getMessageKeyAction(e,state.ui.sendOnEnter!==false);
+ if(action==='send'){e.preventDefault();$('#sendForm').requestSubmit()}
+});
+$('#sendForm').onsubmit=async e=>{e.preventDefault();await sendCurrentMessage()};document.addEventListener('paste',e=>{if(!state.active)return;const items=[...(e.clipboardData?.items||[])];const images=items.filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(images.length){e.preventDefault();addMessageFiles(images)}});
 $('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='saved')openSavedMessages();else if(action==='hidden')openHiddenMessages();else if(action==='blocked')openBlockedUsers();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b))});const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}});
 
 function installMaterialIconFont(){
