@@ -578,7 +578,7 @@ async function chatDetails(c){
   '<button class="soft-btn" id="toggleChatFavorite"><span class="material-symbols-rounded">'+(Number(c.is_starred)?'star':'star_outline')+'</span>'+(Number(c.is_starred)?'Убрать из избранного':'Добавить в избранное')+'</button>'+
   '<button class="soft-btn" id="toggleChatPin"><span class="material-symbols-rounded">'+(Number(c.is_pinned)?'keep_off':'push_pin')+'</span>'+(Number(c.is_pinned)?'Открепить чат':'Закрепить чат')+'</button>'+
   '<button class="soft-btn" id="toggleChatArchive"><span class="material-symbols-rounded">'+(Number(c.is_archived)?'unarchive':'archive')+'</span>'+(Number(c.is_archived)?'Вернуть из архива':'Переместить в архив')+'</button>'+
-  '<button class="soft-btn" id="toggleChatMute"><span class="material-symbols-rounded">'+(Number(c.is_muted)?'notifications':'notifications_off')+'</span>'+(Number(c.is_muted)?'Включить уведомления':'Отключить уведомления')+'</button>'+
+  '<div class="chat-mute-control"><label for="chatMuteDuration">Отключить уведомления</label><div class="chat-mute-row"><select id="chatMuteDuration" aria-label="Длительность отключения уведомлений"><option value="60">На 1 час</option><option value="480">На 8 часов</option><option value="1440">На 24 часа</option><option value="10080">На 7 дней</option><option value="-1">Навсегда</option></select><button class="soft-btn" id="toggleChatMute">'+(Number(c.is_muted)?'Включить':'Отключить')+'</button></div>'+(Number(c.is_muted)?'<small class="muted">Уведомления сейчас отключены'+(Number(c.muted_until)?' до '+new Date(Number(c.muted_until)*1000).toLocaleString('ru-RU'):' без срока')+'</small>':'')+'</div>'+
   '<button class="soft-btn" id="openScheduledMessages"><span class="material-symbols-rounded">schedule</span>Отложенные сообщения</button>'+
   '<button class="soft-btn" id="exportChatHistory"><span class="material-symbols-rounded">download</span>Экспортировать историю</button></div>';
  const dialog=modal('Информация о чате','Параметры пространства',formHtml+memberPanel+preferenceHtml,actions);
@@ -595,7 +595,16 @@ async function chatDetails(c){
  $('#toggleChatFavorite').onclick=()=>updatePreference('starred',!Number(c.is_starred));
  $('#toggleChatPin').onclick=()=>updatePreference('pinned',!Number(c.is_pinned));
  $('#toggleChatArchive').onclick=()=>updatePreference('archived',!Number(c.is_archived));
- $('#toggleChatMute').onclick=()=>updatePreference('muted',!Number(c.is_muted));
+ $('#toggleChatMute').onclick=async()=>{
+  try{
+   const muteMinutes=Number(c.is_muted)?0:Number($('#chatMuteDuration').value);
+   await api('/api/chats/'+c.id+'/preferences',{method:'PATCH',body:JSON.stringify({muteMinutes})});
+   await loadChats();
+   if(state.active?.id===c.id)state.active=state.chats.find(x=>x.id===c.id)||state.active;
+   closeModal();
+   toast(muteMinutes===0?'Уведомления включены':muteMinutes===-1?'Уведомления отключены навсегда':'Уведомления отключены на выбранный срок');
+  }catch(e){toast(e.message)}
+ };
  $('#openScheduledMessages').onclick=openScheduledMessages;
  $('#exportChatHistory').onclick=()=>exportChatHistory(c.id);
  dialog.querySelectorAll('[data-member-role]').forEach(button=>button.onclick=async()=>{
