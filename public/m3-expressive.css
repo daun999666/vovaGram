@@ -649,3 +649,22 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 @media(prefers-reduced-motion:reduce){
  .m3-transfer-native-progress,.media-waveform.m3-native-progress{scroll-behavior:auto}
 }
+
+
+/* 2.0 persistent chat organisation */
+.folder-tabs{
+ display:flex!important;flex-wrap:nowrap!important;justify-content:flex-start;
+ overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;
+ padding:3px 2px 7px;gap:6px;white-space:nowrap;
+}
+.folder-tabs .folder{flex:0 0 auto;white-space:nowrap;min-height:32px;padding-inline:12px}
+.chat-favorite-mark{display:inline-block;margin-left:4px;color:var(--primary);font-size:12px;vertical-align:1px}
+.chat-preference-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;padding:12px;border-radius:18px;background:var(--surface2)}
+.chat-preference-actions h3{flex:0 0 100%;margin:0;font-size:13px}
+.chat-preference-actions button{display:inline-flex;align-items:center;gap:7px;min-height:38px}
+.chat-preference-actions .material-symbols-rounded{font-size:17px;margin:0}
+.message-search-icon{display:grid;place-items:center;background:var(--surface3);color:var(--primary)}
+.message-search-icon .material-symbols-rounded{font-size:19px;margin:0}
+.m3-search-hit .message-content{outline:2px solid color-mix(in srgb,var(--primary) 70%,transparent);outline-offset:3px;animation:m3-search-pulse 1.4s ease}
+@keyframes m3-search-pulse{0%,100%{outline-color:transparent}35%{outline-color:var(--primary)}}
+@media(max-width:560px){.folder-tabs{margin-inline:-2px}.folder-tabs .folder{font-size:10px;padding-inline:10px}}
