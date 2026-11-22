@@ -140,6 +140,7 @@ ensureColumn("messages","forwarded_from_name","TEXT");
 ensureColumn("messages","forwarded_from_chat_id","INTEGER");
 ensureColumn("messages","forwarded_from_chat_title","TEXT");
 ensureColumn("chat_preferences","pinned","INTEGER DEFAULT 0");
+ensureColumn("chat_preferences","muted_until","INTEGER DEFAULT 0");
 
 const q = (sql) => db.prepare(sql);
 const getUser = q("SELECT id,number,username,display_name,bio,avatar,profile_bg,theme,role,banned,created_at FROM users WHERE id=?");
@@ -424,7 +425,8 @@ app.get("/api/chats",auth,(req,res)=>{
     (SELECT m2.user_id FROM members m2 WHERE m2.chat_id=c.id AND m2.user_id<>? LIMIT 1) AS peer_user_id,
     COALESCE(cp.archived,0) AS is_archived,
     COALESCE(cp.starred,0) AS is_starred,
-    COALESCE(cp.muted,0) AS is_muted,
+    CASE WHEN COALESCE(cp.muted,0)=1 AND (COALESCE(cp.muted_until,0)=0 OR cp.muted_until>CAST(strftime('%s','now') AS INTEGER)) THEN 1 ELSE 0 END AS is_muted,
+    COALESCE(cp.muted_until,0) AS muted_until,
     COALESCE(cp.pinned,0) AS is_pinned
     FROM chats c JOIN members m ON m.chat_id=c.id
     LEFT JOIN chat_preferences cp ON cp.chat_id=c.id AND cp.user_id=m.user_id
@@ -442,18 +444,29 @@ app.patch("/api/chats/:id/preferences",auth,(req,res)=>{
   if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:"Некорректный ID чата"});
   if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id))
     return res.status(403).json({error:"Нет доступа"});
-  const current=q("SELECT archived,starred,muted,pinned FROM chat_preferences WHERE user_id=? AND chat_id=?").get(req.user.id,id)||{archived:0,starred:0,muted:0,pinned:0};
+  const current=q("SELECT archived,starred,muted,pinned,muted_until FROM chat_preferences WHERE user_id=? AND chat_id=?").get(req.user.id,id)||{archived:0,starred:0,muted:0,pinned:0,muted_until:0};
   const next={
     archived:req.body.archived===undefined?current.archived:(req.body.archived?1:0),
     starred:req.body.starred===undefined?current.starred:(req.body.starred?1:0),
     muted:req.body.muted===undefined?current.muted:(req.body.muted?1:0),
-    pinned:req.body.pinned===undefined?(current.pinned||0):(req.body.pinned?1:0)
+    pinned:req.body.pinned===undefined?(current.pinned||0):(req.body.pinned?1:0),
+    muted_until:Number(current.muted_until)||0
   };
-  q(`INSERT INTO chat_preferences(user_id,chat_id,archived,starred,muted,pinned)
-    VALUES(?,?,?,?,?,?)
+  if(req.body.muteMinutes!==undefined){
+    const minutes=Number(req.body.muteMinutes);
+    if(![-1,0,60,480,1440,10080].includes(minutes))
+      return res.status(400).json({error:"Выберите допустимую длительность отключения уведомлений"});
+    next.muted=minutes===0?0:1;
+    next.muted_until=minutes===-1||minutes===0?0:Math.floor(Date.now()/1000)+minutes*60;
+  } else if(req.body.muted!==undefined) {
+    next.muted_until=0;
+  }
+  q(`INSERT INTO chat_preferences(user_id,chat_id,archived,starred,muted,pinned,muted_until)
+    VALUES(?,?,?,?,?,?,?)
     ON CONFLICT(user_id,chat_id) DO UPDATE SET
-      archived=excluded.archived,starred=excluded.starred,muted=excluded.muted,pinned=excluded.pinned,updated_at=CURRENT_TIMESTAMP`)
-    .run(req.user.id,id,next.archived,next.starred,next.muted,next.pinned);
+      archived=excluded.archived,starred=excluded.starred,muted=excluded.muted,pinned=excluded.pinned,
+      muted_until=excluded.muted_until,updated_at=CURRENT_TIMESTAMP`)
+    .run(req.user.id,id,next.archived,next.starred,next.muted,next.pinned,next.muted_until);
   res.json({ok:true,preferences:next});
 });
 app.post("/api/chats",auth,(req,res)=>{
