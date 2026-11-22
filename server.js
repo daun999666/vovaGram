@@ -140,6 +140,7 @@ ensureColumn("chats","slow_mode_seconds","INTEGER DEFAULT 0");
 ensureColumn("chats","username","TEXT");
 ensureColumn("messages","sender_as_channel","INTEGER DEFAULT 0");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_username ON chats(username COLLATE NOCASE) WHERE username IS NOT NULL AND username<>''");
+db.exec("CREATE TABLE IF NOT EXISTS channel_post_views (message_id INTEGER NOT NULL,user_id INTEGER NOT NULL,viewed_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(message_id,user_id))");
 ensureColumn("messages","reply_to","INTEGER");
 ensureColumn("messages","edited_at","TEXT");
 ensureColumn("messages","reactions","TEXT DEFAULT '{}'");
@@ -505,6 +506,32 @@ app.get("/api/channels/by-username/:username",auth,(req,res)=>{
   const member=q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(channel.id,req.user.id);
   res.json({channel,isMember:!!member,memberCount:q("SELECT COUNT(*) n FROM members WHERE chat_id=?").get(channel.id).n});
 });
+app.get("/api/channels",auth,(req,res)=>{
+  const search=String(req.query.q||"").trim().replace(/^@/,"").slice(0,64);
+  const like="%"+search.replace(/[\\%_]/g,"\\app.get("/api/chats/:id/messages",auth,(req,res)=>{")+"%";
+  const channels=q(`SELECT c.id,c.title,c.description,c.avatar,c.username,c.created_at,
+    (SELECT COUNT(*) FROM members m WHERE m.chat_id=c.id) AS member_count
+    FROM chats c WHERE c.type='channel' AND c.username IS NOT NULL AND c.username<>'' 
+      AND (?='' OR c.title LIKE ? ESCAPE '\\' OR c.username LIKE ? ESCAPE '\\')
+    ORDER BY member_count DESC,c.id DESC LIMIT 50`).all(search,like,like);
+  res.json({channels});
+});
+app.post("/api/channels/:id/subscribe",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  const channel=q("SELECT id FROM chats WHERE id=? AND type='channel' AND username IS NOT NULL AND username<>''").get(id);
+  if(!channel) return res.status(404).json({error:"Публичный канал не найден"});
+  const added=q("INSERT OR IGNORE INTO members(chat_id,user_id,role) VALUES(?,?,'member')").run(id,req.user.id);
+  if(added.changes) io.to("chat:"+id).emit("chat-member-joined",{chatId:id,userId:req.user.id});
+  res.json({ok:true,subscribed:true,alreadySubscribed:!added.changes});
+});
+app.delete("/api/channels/:id/subscribe",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  const channel=q("SELECT id,owner_id FROM chats WHERE id=? AND type='channel' AND username IS NOT NULL AND username<>''").get(id);
+  if(!channel) return res.status(404).json({error:"Публичный канал не найден"});
+  if(channel.owner_id===req.user.id) return res.status(403).json({error:"Владелец не может отписаться от собственного канала"});
+  q("DELETE FROM members WHERE chat_id=? AND user_id=?").run(id,req.user.id);
+  res.json({ok:true,subscribed:false});
+});
 app.get("/api/chats/:id/messages",auth,(req,res)=>{
   const id=Number(req.params.id);
   if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:"Некорректный ID чата"});
@@ -526,6 +553,12 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
   const rows=before
     ? q(select+" AND m.id<? ORDER BY m.id DESC LIMIT ?").all(req.user.id,id,req.user.id,before,limit+1)
     : q(select+" ORDER BY m.id DESC LIMIT ?").all(req.user.id,id,req.user.id,limit+1);
+  if(q("SELECT type FROM chats WHERE id=?").get(id)?.type==="channel"){
+    const viewed=rows.filter(message=>message.user_id!==req.user.id).map(message=>message.id);
+    const markView=q("INSERT OR IGNORE INTO channel_post_views(message_id,user_id) VALUES(?,?)");
+    for(const messageId of viewed)markView.run(messageId,req.user.id);
+    for(const message of rows)message.view_count=q("SELECT COUNT(*) AS n FROM channel_post_views WHERE message_id=?").get(message.id).n;
+  }
   const hasMore=rows.length>limit;
   const messages=rows.slice(0,limit).reverse();
   res.json({messages,hasMore,nextCursor:messages[0]?.id||null});
