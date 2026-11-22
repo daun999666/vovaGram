@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS chat_preferences (user_id INTEGER NOT NULL,chat_id IN
 CREATE TABLE IF NOT EXISTS message_edits (id INTEGER PRIMARY KEY AUTOINCREMENT,message_id INTEGER NOT NULL,edited_by INTEGER NOT NULL,body TEXT NOT NULL,edited_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS chat_drafts (user_id INTEGER NOT NULL,chat_id INTEGER NOT NULL,body TEXT NOT NULL DEFAULT '',updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chat_id));
 CREATE TABLE IF NOT EXISTS hidden_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,hidden_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
+CREATE TABLE IF NOT EXISTS blocked_users (blocker_id INTEGER NOT NULL,blocked_id INTEGER NOT NULL,blocked_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(blocker_id,blocked_id));
 CREATE TRIGGER IF NOT EXISTS cleanup_deleted_message_references
 AFTER DELETE ON messages
 BEGIN
@@ -261,12 +262,34 @@ app.post("/api/dm",auth,(req,res)=>{
   const username=cleanUsername(req.body.username), target=q("SELECT * FROM users WHERE username=?").get(username) || q("SELECT users.* FROM users JOIN user_names ON users.id=user_names.user_id WHERE user_names.username=?").get(username);
   if(!target || target.banned) return res.status(404).json({error:"Пользователь не найден"});
   if(target.id===req.user.id) return res.status(400).json({error:"Нельзя открыть диалог с собой"});
+  const blocked=q("SELECT 1 FROM blocked_users WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)").get(req.user.id,target.id,target.id,req.user.id);
+  if(blocked) return res.status(403).json({error:"Личный диалог недоступен из-за блокировки"});
   const existing=q(`SELECT c.id FROM chats c JOIN members a ON a.chat_id=c.id AND a.user_id=? JOIN members b ON b.chat_id=c.id AND b.user_id=? WHERE c.type='direct' LIMIT 1`).get(req.user.id,target.id);
   if(existing) return res.json({chat:q("SELECT * FROM chats WHERE id=?").get(existing.id)});
   const info=q("INSERT INTO chats(title,description,type,owner_id,avatar) VALUES(?,?, 'direct',?,?)").run(target.display_name,"Личный диалог",req.user.id,target.avatar||"");
   q("INSERT INTO members(chat_id,user_id,role) VALUES(?,?,'owner')").run(info.lastInsertRowid,req.user.id);
   q("INSERT INTO members(chat_id,user_id,role) VALUES(?,?,'member')").run(info.lastInsertRowid,target.id);
   res.json({chat:q("SELECT * FROM chats WHERE id=?").get(info.lastInsertRowid)});
+});
+app.get("/api/blocks",auth,(req,res)=>{
+  const users=q(`SELECT u.id,u.username,u.display_name,u.avatar,b.blocked_at
+    FROM blocked_users b JOIN users u ON u.id=b.blocked_id
+    WHERE b.blocker_id=? ORDER BY b.blocked_at DESC`).all(req.user.id);
+  res.json({users});
+});
+app.post("/api/users/:id/block",auth,(req,res)=>{
+  const targetId=Number(req.params.id);
+  if(!Number.isSafeInteger(targetId)||targetId<1) return res.status(400).json({error:"Некорректный ID пользователя"});
+  if(targetId===req.user.id) return res.status(400).json({error:"Нельзя заблокировать себя"});
+  const target=getUser.get(targetId);
+  if(!target||target.banned) return res.status(404).json({error:"Пользователь не найден"});
+  q("INSERT OR IGNORE INTO blocked_users(blocker_id,blocked_id) VALUES(?,?)").run(req.user.id,targetId);
+  res.json({ok:true,blocked:true});
+});
+app.delete("/api/users/:id/block",auth,(req,res)=>{
+  const targetId=Number(req.params.id);
+  q("DELETE FROM blocked_users WHERE blocker_id=? AND blocked_id=?").run(req.user.id,targetId);
+  res.json({ok:true,blocked:false});
 });
 app.get("/api/chats",auth,(req,res)=>{
   const chats=q(`SELECT c.*,m.role AS my_role,
@@ -441,6 +464,11 @@ app.post("/api/chats/:id/messages",auth,(req,res)=>{
   const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
   if(!membership) return res.status(403).json({error:"Нет доступа"});
   const chatType=q("SELECT type FROM chats WHERE id=?").get(id)?.type;
+  if(chatType==="direct"){
+    const other=q("SELECT user_id FROM members WHERE chat_id=? AND user_id<>? LIMIT 1").get(id,req.user.id);
+    if(other&&q("SELECT 1 FROM blocked_users WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)").get(req.user.id,other.user_id,other.user_id,req.user.id))
+      return res.status(403).json({error:"Нельзя отправить сообщение: один из участников заблокировал другого"});
+  }
   if(chatType==="channel" && !["owner","admin"].includes(membership.role) && !["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Публиковать в канале могут только администраторы"});
   const replyTo=Number(req.body.replyTo)||null;
   if(replyTo && !q("SELECT id FROM messages WHERE id=? AND chat_id=?").get(replyTo,id)) return res.status(400).json({error:"Сообщение для ответа не найдено"});
@@ -478,7 +506,7 @@ app.get("/api/search",auth,(req,res)=>{
   const term=String(req.query.q||"").trim().replace(/^@/,"").slice(0,40);
   if(term.length<2) return res.json({users:[],chats:[]});
   const like="%"+term.replace(/[\\%_]/g,"\\$&")+"%";
-  const users=q("SELECT id,username,display_name,avatar,bio,role FROM users WHERE banned=0 AND (username LIKE ? OR display_name LIKE ?) LIMIT 20").all(like,like);
+  const users=q(`SELECT id,username,display_name,avatar,bio,role FROM users WHERE banned=0 AND (username LIKE ? OR display_name LIKE ?) AND id<>? AND NOT EXISTS(SELECT 1 FROM blocked_users b WHERE (b.blocker_id=? AND b.blocked_id=users.id) OR (b.blocker_id=users.id AND b.blocked_id=?)) LIMIT 20`).all(like,like,req.user.id,req.user.id,req.user.id);
   const chats=q("SELECT id,title,description,type,avatar FROM chats WHERE id IN (SELECT chat_id FROM members WHERE user_id=?) AND title LIKE ? LIMIT 20").all(req.user.id,like);
   res.json({users,chats});
 });
