@@ -228,6 +228,12 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   });
   assert.equal(m4aUpload.status, 200, JSON.stringify(m4aUpload.body));
   assert.match(m4aUpload.body.url, /\.m4a$/);
+  const browserM4aUpload = await request(baseUrl, ownerToken, "/api/upload", {
+    method: "POST", body: JSON.stringify({ kind: "audio", data: "data:application/octet-stream;base64," + m4aBytes.toString("base64") })
+  });
+  assert.equal(browserM4aUpload.status, 200, JSON.stringify(browserM4aUpload.body));
+  assert.match(browserM4aUpload.body.url, /\.m4a$/);
+  assert.equal(browserM4aUpload.body.mime, "audio/mp4");
   const savedWavSong = await request(baseUrl, ownerToken, "/api/songs", {
     method: "POST", body: JSON.stringify({ title: "WAV smoke", url: wavUpload.body.url })
   });
@@ -652,6 +658,33 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(newPasswordLogin.status, 200);
   const activityAfter = await request(baseUrl, ownerToken, "/api/account/activity");
   assert.ok(activityAfter.body.events.some(event => event.event === "password_changed"));
+
+  const currentOwnerToken = newPasswordLogin.body.token;
+  const bulkOne = await request(baseUrl, currentOwnerToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "bulk delete own one" })
+  });
+  const bulkTwo = await request(baseUrl, currentOwnerToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "bulk delete own two" })
+  });
+  const bulkOther = await request(baseUrl, memberToken, `/api/chats/${chatId}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "not deletable by another member" })
+  });
+  assert.equal(bulkOne.status, 200);
+  assert.equal(bulkTwo.status, 200);
+  assert.equal(bulkOther.status, 200);
+  const forbiddenBulkDelete = await request(baseUrl, currentOwnerToken, `/api/chats/${chatId}/messages/bulk-delete`, {
+    method: "POST", body: JSON.stringify({ ids: [bulkOne.body.message.id, bulkOther.body.message.id] })
+  });
+  assert.equal(forbiddenBulkDelete.status, 403);
+  const successfulBulkDelete = await request(baseUrl, currentOwnerToken, `/api/chats/${chatId}/messages/bulk-delete`, {
+    method: "POST", body: JSON.stringify({ ids: [bulkOne.body.message.id, bulkTwo.body.message.id] })
+  });
+  assert.equal(successfulBulkDelete.status, 200);
+  assert.deepEqual(successfulBulkDelete.body.deleted.sort((a,b)=>a-b), [bulkOne.body.message.id,bulkTwo.body.message.id].sort((a,b)=>a-b));
+  const oversizedBulkDelete = await request(baseUrl, currentOwnerToken, `/api/chats/${chatId}/messages/bulk-delete`, {
+    method: "POST", body: JSON.stringify({ ids: Array.from({length:101},(_,i)=>i+1) })
+  });
+  assert.equal(oversizedBulkDelete.status, 400);
 
   const sixthRegistration = await request(baseUrl, null, "/api/register", {
     method: "POST", body: JSON.stringify({ username: "v2sixth" + suffix, password: "test-password-123" })
