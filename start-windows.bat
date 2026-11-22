@@ -15,7 +15,7 @@ if not exist node_modules (
 )
 if not exist .env if exist .env.example copy .env.example .env >nul
 echo Starting vovchikGram server...
-start "vovchikGram server" /min "%ComSpec%" /d /c "cd /d ""%~dp0"" && set NO_BROWSER=1 && npm start"
+start "vovchikGram server" "%ComSpec%" /d /c "cd /d ""%~dp0"" && set NO_BROWSER=1 && npm start"
 echo Waiting for local server...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 60;$i++){try{$r=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8787/api/health' -TimeoutSec 2;if($r.StatusCode -eq 200){$ready=$true;break}}catch{};Start-Sleep -Seconds 1};if(!$ready){exit 1}"
 if errorlevel 1 (
