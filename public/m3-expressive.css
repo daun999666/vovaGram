@@ -704,3 +704,8 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .m3-hidden-item small{font-size:10px;color:var(--muted)}
 .m3-hidden-item button{flex:none}
 #messageInput[data-has-draft="true"]{text-decoration-color:var(--primary)}
+
+
+/* Account blocking */
+#startDM:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.3)}
+#toggleUserBlock{border-radius:var(--m3-shape-full)}
