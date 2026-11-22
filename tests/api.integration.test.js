@@ -186,6 +186,35 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   });
   assert.equal(adminCannotPromoteSelf.status, 403);
 
+  const joinRequest = await request(baseUrl, guestToken, `/api/chats/${chatId}/join-requests`, {
+    method: "POST", body: "{}"
+  });
+  assert.equal(joinRequest.status, 200);
+  assert.equal(joinRequest.body.pending, true);
+  const duplicateJoinRequest = await request(baseUrl, guestToken, `/api/chats/${chatId}/join-requests`, {
+    method: "POST", body: "{}"
+  });
+  assert.equal(duplicateJoinRequest.status, 200);
+  assert.equal(duplicateJoinRequest.body.requestId, joinRequest.body.requestId);
+  const guestCannotReviewRequests = await request(baseUrl, guestToken, `/api/chats/${chatId}/join-requests`);
+  assert.equal(guestCannotReviewRequests.status, 403);
+  const pendingJoinRequests = await request(baseUrl, ownerToken, `/api/chats/${chatId}/join-requests`);
+  assert.equal(pendingJoinRequests.status, 200);
+  assert.equal(pendingJoinRequests.body.requests.length, 1);
+  assert.equal(pendingJoinRequests.body.requests[0].user_id, guest.body.user.id);
+  const invalidJoinDecision = await request(baseUrl, ownerToken, `/api/chats/${chatId}/join-requests/${joinRequest.body.requestId}`, {
+    method: "PATCH", body: JSON.stringify({ decision: "maybe" })
+  });
+  assert.equal(invalidJoinDecision.status, 400);
+  const approvedJoinRequest = await request(baseUrl, ownerToken, `/api/chats/${chatId}/join-requests/${joinRequest.body.requestId}`, {
+    method: "PATCH", body: JSON.stringify({ decision: "approve" })
+  });
+  assert.equal(approvedJoinRequest.status, 200);
+  const guestNowMember = await request(baseUrl, guestToken, `/api/chats/${chatId}/messages`);
+  assert.equal(guestNowMember.status, 200);
+  const handledJoinRequests = await request(baseUrl, ownerToken, `/api/chats/${chatId}/join-requests`);
+  assert.equal(handledJoinRequests.body.requests.length, 0);
+
   const inviteCreated = await request(baseUrl, ownerToken, `/api/chats/${chatId}/invites`, {
     method: "POST", body: JSON.stringify({ expiresInSeconds: 3600, maxUses: 1 })
   });
