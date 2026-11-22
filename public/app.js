@@ -154,6 +154,24 @@ async function saveMessage(message){
  try{await api('/api/messages/'+message.id+'/save',{method:'POST'});toast('Сохранено в Избранное')}
  catch(e){toast(e.message)}
 }
+async function forwardMessage(message){
+ const available=state.chats.filter(chat=>chat.id!==message.chat_id||state.chats.length===1);
+ const choices=available.map(chat=>'<button type="button" class="m3-forward-choice" data-forward-chat="'+chat.id+'"><span class="material-symbols-rounded">'+(chat.type==='channel'?'campaign':chat.type==='group'?'groups':'person')+'</span><span><b>'+esc(chat.title)+'</b><small>'+(chat.type==='channel'?'Канал':chat.type==='group'?'Группа':'Личный чат')+'</small></span></button>').join('');
+ const dialog=modal('Переслать сообщение','Выбери чат назначения',choices||'<p class="empty">Нет доступных чатов</p>','<button class="soft-btn" data-close>Отмена</button>');
+ dialog.querySelectorAll('[data-forward-chat]').forEach(button=>button.onclick=async()=>{
+  try{
+   await api('/api/messages/'+message.id+'/forward',{method:'POST',body:JSON.stringify({chatId:Number(button.dataset.forwardChat)})});
+   closeModal();toast('Сообщение переслано');await loadChats();
+  }catch(e){toast(e.message)}
+ });
+}
+async function openMessageHistory(message){
+ try{
+  const d=await api('/api/messages/'+message.id+'/edits');
+  const entries=(d.edits||[]).map((edit,index)=>'<article class="m3-history-entry"><small>Версия '+(d.edits.length-index)+' · '+new Date(String(edit.edited_at).replace(' ','T')+'Z').toLocaleString('ru-RU')+'</small><p>'+esc(edit.body)+'</p></article>').join('');
+  modal('История изменений','Предыдущие версии сообщения',entries||'<p class="empty">История изменений пока пуста</p>');
+ }catch(e){toast(e.message)}
+}
 async function openSavedMessages(){
  try{
   const d=await api('/api/saved');
@@ -169,6 +187,9 @@ function addMessage(m,{prepend=false}={}){
  const senderName=mine?(state.user?.displayName||state.user?.username||m.username):(m.display_name||m.username||'Пользователь');
  const senderAvatar=mine?(state.user?.avatar||m.avatar):(m.avatar||'');
  let reply='';if(m.reply_to)reply='<div class="reply-preview">Ответ на сообщение #'+Number(m.reply_to)+'</div>';
+ const forwardHeader=m.forwarded_from_name?'<div class="message-forward"><span class="material-symbols-rounded">forward</span><span><b>Переслано от '+esc(m.forwarded_from_name)+'</b><small>'+esc(m.forwarded_from_chat_title||'Исходный чат')+'</small></span></div>':'';
+ const forwardCount=Number(m.forward_count)>0?'<span class="message-forward-count" title="Количество пересылок"><span class="material-symbols-rounded">forward</span>'+Number(m.forward_count)+'</span>':'';
+
  let reactions={};try{reactions=JSON.parse(m.reactions||'{}')}catch{}
  const react=Object.entries(reactions).filter(([,ids])=>Array.isArray(ids)&&ids.length).map(([emo,ids])=>'<button class="reaction" data-react="'+esc(emo)+'">'+esc(emo)+' '+ids.length+'</button>').join('');
  let attachments=[];try{attachments=JSON.parse(m.attachments||'[]')}catch{}
@@ -178,14 +199,16 @@ function addMessage(m,{prepend=false}={}){
  const el=document.createElement('article');
  el.id='msg-'+m.id;el.dataset.messageId=String(m.id);el.dataset.sender=m.username||'';el.className='message m3-message'+(mine?' mine':'');
  el.innerHTML='<div class="message-avatar">'+avatar(senderAvatar,senderName,'sender-avatar')+'</div>'+
-  '<div class="message-content"><div class="sender"><b>'+esc(senderName)+'</b> '+badge(mine?state.user:m)+'</div>'+
+  '<div class="message-content">'+forwardHeader+'<div class="sender"><b>'+esc(senderName)+'</b> '+badge(mine?state.user:m)+'</div>'+
   reply+(m.body?'<p>'+esc(m.body)+'</p>':'')+media+
   '<div class="message-foot"><time>'+time+(m.edited_at?' · изм.':'')+'</time>'+
   (mine?'<span class="message-read" title="'+(Number(m.read_by_count)>0?'Прочитано':'Отправлено')+'">'+m3Icon(Number(m.read_by_count)>0?'done_all':'done')+'</span>':'')+
-  '<span class="message-actions">'+
+  forwardCount+'<span class="message-actions">'+
   '<button data-copy title="Копировать" aria-label="Копировать">'+m3Icon('content_copy')+'</button>'+
   '<button data-reply title="Ответить" aria-label="Ответить">'+m3Icon('reply')+'</button>'+
   '<button data-save title="В Избранное" aria-label="В Избранное">'+m3Icon('bookmark_add')+'</button>'+
+  '<button data-forward title="Переслать" aria-label="Переслать">'+m3Icon('forward')+'</button>'+
+  (m.edited_at?'<button data-history title="История изменений" aria-label="История изменений">'+m3Icon('history')+'</button>':'')+
   ((state.active?.type==='direct'||['owner','admin'].includes(state.active?.my_role)||['owner','dev'].includes(state.user?.role))?'<button data-pin data-pinned="'+(m.is_pinned?'true':'false')+'" title="'+(m.is_pinned?'Открепить':'Закрепить')+'" aria-label="Закрепить сообщение">'+m3Icon('push_pin')+'</button>':'')+
   '<button data-react-open title="Реакция" aria-label="Реакция">'+m3Icon('add_reaction')+'</button>'+
   (mine?'<button data-edit title="Изменить" aria-label="Изменить">'+m3Icon('edit')+'</button><button data-delete title="Удалить" aria-label="Удалить">'+m3Icon('delete')+'</button>':'')+
@@ -193,6 +216,8 @@ function addMessage(m,{prepend=false}={}){
  el.querySelector('[data-copy]').onclick=async()=>{try{await navigator.clipboard.writeText(m.body||'Изображение');toast('Скопировано')}catch{toast('Браузер запретил копирование')}};
  el.querySelector('[data-reply]').onclick=()=>setReply(m);
  el.querySelector('[data-save]').onclick=()=>saveMessage(m);
+ el.querySelector('[data-forward]').onclick=()=>forwardMessage(m);
+ el.querySelector('[data-history]')?.addEventListener('click',()=>openMessageHistory(m));
  el.querySelector('[data-pin]').onclick=()=>togglePinMessage(m);
  el.querySelector('[data-react-open]').onclick=()=>quickReact(m);
  el.querySelector('[data-edit]')?.addEventListener('click',()=>editMessage(m));
