@@ -106,6 +106,37 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const currentStillWorks = await request(baseUrl, ownerToken, "/api/me");
   assert.equal(currentStillWorks.status, 200);
 
+  const thirdLogin = await request(baseUrl, null, "/api/login", {
+    method: "POST", body: JSON.stringify({ username: "v2owner" + suffix, password: "test-password-123" })
+  });
+  assert.equal(thirdLogin.status, 200);
+  const thirdSessionId = JSON.parse(Buffer.from(thirdLogin.body.token.split(".")[1], "base64url").toString()).sid;
+  const memberSessions = await request(baseUrl, memberToken, "/api/sessions");
+  assert.equal(memberSessions.status, 200);
+  assert.equal(memberSessions.body.sessions.length, 1);
+  assert.equal(memberSessions.body.sessions.some(x => x.id === thirdSessionId), false);
+  const crossAccountRevoke = await request(baseUrl, memberToken, "/api/sessions/" + thirdSessionId, { method: "DELETE" });
+  assert.equal(crossAccountRevoke.status, 404);
+
+  const revokeOthers = await request(baseUrl, ownerToken, "/api/sessions/revoke-others", { method: "POST", body: "{}" });
+  assert.equal(revokeOthers.status, 200);
+  assert.equal(revokeOthers.body.revoked, 1);
+  const thirdSessionCheck = await request(baseUrl, thirdLogin.body.token, "/api/me");
+  assert.equal(thirdSessionCheck.status, 401);
+  const sessionsAfterRevokeOthers = await request(baseUrl, ownerToken, "/api/sessions");
+  assert.equal(sessionsAfterRevokeOthers.body.sessions.length, 1);
+  assert.equal(sessionsAfterRevokeOthers.body.sessions[0].current, true);
+
+  const logoutLogin = await request(baseUrl, null, "/api/login", {
+    method: "POST", body: JSON.stringify({ username: "v2owner" + suffix, password: "test-password-123" })
+  });
+  assert.equal(logoutLogin.status, 200);
+  const logoutResult = await request(baseUrl, logoutLogin.body.token, "/api/logout", { method: "POST", body: "{}" });
+  assert.equal(logoutResult.status, 200);
+  const loggedOutCheck = await request(baseUrl, logoutLogin.body.token, "/api/me");
+  assert.equal(loggedOutCheck.status, 401);
+  const ownerSessionStillWorks = await request(baseUrl, ownerToken, "/api/me");
+  assert.equal(ownerSessionStillWorks.status, 200);
 
   const direct = await request(baseUrl, ownerToken, "/api/dm", {
     method: "POST", body: JSON.stringify({ username: "v2member" + suffix })
