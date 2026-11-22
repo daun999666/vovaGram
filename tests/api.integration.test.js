@@ -206,6 +206,9 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(channelHistoryFirst.status, 200);
   assert.equal(channelHistoryFirst.body.messages[0].display_name, "Public v2 channel");
   assert.equal(channelHistoryFirst.body.messages[0].view_count, 1);
+  assert.equal(channelHistoryFirst.body.messages[0].username, null);
+  assert.equal("internal_sender_id" in channelHistoryFirst.body.messages[0], false);
+  assert.equal("user_id" in channelHistoryFirst.body.messages[0], false);
   const channelHistorySecond = await request(baseUrl, guestToken, "/api/chats/" + channelId + "/messages");
   assert.equal(channelHistorySecond.body.messages[0].view_count, 1, "views are deduplicated per account");
   const unsubscribe = await request(baseUrl, guestToken, "/api/channels/" + channelId + "/subscribe", { method: "DELETE" });
