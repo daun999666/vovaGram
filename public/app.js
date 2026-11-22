@@ -434,12 +434,36 @@ async function chatDetails(c){
  const canDelete=true;
  const canManageDelete=c.owner_id===state.user.id||c.my_role==='owner'||state.user.role==='owner';
  const deleteDescription=c.type==='direct'?'Диалог будет скрыт из твоего списка.':canManageDelete?`Удаление ${c.type==='channel'?'канала':'группы'} необратимо: будут удалены сообщения и участники.`:`Ты покинешь ${c.type==='channel'?'канал':'группу'}; у остальных участников он останется.`;
+ let memberPanel='';
+ const canManageMembers=['owner','admin'].includes(c.my_role)||['owner','dev'].includes(state.user.role);
+ if(c.type!=='direct'){
+  try{
+   const memberData=await api('/api/chats/'+c.id+'/members');
+   const memberRows=(memberData.members||[]).map(member=>{
+    const isOwner=member.chat_role==='owner';
+    const canManageThis=canManageMembers&&member.id!==state.user.id&&!isOwner&&(
+     ['owner','dev'].includes(state.user.role)||c.my_role==='owner'||(c.my_role==='admin'&&member.chat_role==='member')
+    );
+    let controls='';
+    if(canManageThis){
+     if(['owner','dev'].includes(state.user.role)||c.my_role==='owner'){
+      controls+='<button class="soft-btn" data-member-role="'+member.id+'" data-next-role="'+(member.chat_role==='admin'?'member':'admin')+'">'+(member.chat_role==='admin'?'Снять админа':'Назначить админом')+'</button>';
+     }
+     controls+='<button class="danger" data-remove-member="'+member.id+'">Удалить</button>';
+    }
+    const roleLabel=member.chat_role==='owner'?'Владелец':member.chat_role==='admin'?'Администратор':'Участник';
+    return '<div class="m3-member-row"><span>'+avatar(member.avatar,member.display_name,'result-avatar')+'<span><b>'+esc(member.display_name)+'</b><small>@'+esc(member.username)+' · '+roleLabel+'</small></span></span><span class="m3-member-actions">'+controls+'</span></div>';
+   }).join('');
+   memberPanel='<section class="m3-members-section"><h3>Участники · '+memberData.members.length+'</h3><div class="m3-member-list">'+memberRows+'</div>'+
+    (canManageMembers?'<button class="soft-btn" id="createChatInvite"><span class="material-symbols-rounded">link</span>Создать ссылку-приглашение</button>':'')+'</section>';
+  }catch(error){memberPanel='<p class="muted">Не удалось загрузить список участников.</p>'}
+ }
  const formHtml=`<div class="chat-info-head">${avatar(c.avatar,c.title,'public-avatar')}<div><b>${esc(c.title)}</b><small>${esc(c.description||'')}</small></div></div>${canEdit?`<label class="field"><span>Название</span><input id="chatName" value="${esc(c.title)}"></label><label class="field"><span>Описание</span><textarea id="chatDesc">${esc(c.description||'')}</textarea></label><label class="field"><span>Аватар чата</span><input id="chatAvatarFile" type="file" accept="image/*"></label><label class="field"><span>Обои</span><select id="chatWallpaper"><option value="shapes">Мягкие формы</option><option value="m3forms">Капсулы</option><option value="waves">Дуги</option><option value="dots">Точки</option><option value="plain">Без узора</option><option value="__custom">Своя картинка…</option></select></label><label class="field"><span>Свои обои</span><input id="chatWallpaperFile" type="file" accept="image/png,image/jpeg,image/webp"></label>`:''}<p class="muted">Тип: ${c.type==='channel'?'канал':c.type==='group'?'группа':'личный диалог'}</p>${canDelete?`<p class="muted">${deleteDescription}</p>`:''}`;
  const actions='<button class="soft-btn" data-close>Закрыть</button>'+(canEdit?'<button class="filled" id="saveChat">Сохранить</button>':'')+(canDelete?'<button class="danger" id="deleteChannel">'+(c.type==='direct'?'Убрать диалог':canManageDelete?'Удалить пространство':c.type==='channel'?'Покинуть канал':'Покинуть группу')+'</button>':'');
  const preferenceHtml='<div class="chat-preference-actions"><h3>Быстрые настройки</h3>'+
   '<button class="soft-btn" id="toggleChatFavorite"><span class="material-symbols-rounded">'+(Number(c.is_starred)?'star':'star_outline')+'</span>'+(Number(c.is_starred)?'Убрать из избранного':'Добавить в избранное')+'</button>'+
   '<button class="soft-btn" id="toggleChatArchive"><span class="material-symbols-rounded">'+(Number(c.is_archived)?'unarchive':'archive')+'</span>'+(Number(c.is_archived)?'Вернуть из архива':'Переместить в архив')+'</button></div>';
- modal('Информация о чате','Параметры пространства',formHtml+preferenceHtml,actions);
+ const dialog=modal('Информация о чате','Параметры пространства',formHtml+memberPanel+preferenceHtml,actions);
  const updatePreference=async(field,value)=>{
   try{
    await api('/api/chats/'+c.id+'/preferences',{method:'PATCH',body:JSON.stringify({[field]:value})});
@@ -451,6 +475,28 @@ async function chatDetails(c){
  };
  $('#toggleChatFavorite').onclick=()=>updatePreference('starred',!Number(c.is_starred));
  $('#toggleChatArchive').onclick=()=>updatePreference('archived',!Number(c.is_archived));
+ dialog.querySelectorAll('[data-member-role]').forEach(button=>button.onclick=async()=>{
+  try{
+   await api('/api/chats/'+c.id+'/members/'+button.dataset.memberRole,{method:'PATCH',body:JSON.stringify({role:button.dataset.nextRole})});
+   await loadChats();closeModal();chatDetails(state.chats.find(x=>x.id===c.id)||c);
+  }catch(e){toast(e.message)}
+ });
+ dialog.querySelectorAll('[data-remove-member]').forEach(button=>button.onclick=async()=>{
+  if(!confirm('Удалить участника из этого пространства?'))return;
+  try{
+   await api('/api/chats/'+c.id+'/members/'+button.dataset.removeMember,{method:'DELETE'});
+   await loadChats();closeModal();chatDetails(state.chats.find(x=>x.id===c.id)||c);
+  }catch(e){toast(e.message)}
+ });
+ $('#createChatInvite')?.addEventListener('click',async()=>{
+  try{
+   const result=await api('/api/chats/'+c.id+'/invites',{method:'POST',body:JSON.stringify({expiresInSeconds:7*24*60*60,maxUses:0})});
+   const link=location.origin+'/?invite='+encodeURIComponent(result.invite.token);
+   await navigator.clipboard.writeText(link);
+   toast('Ссылка на приглашение скопирована');
+  }catch(e){toast(e.message||'Не удалось скопировать ссылку')}
+ });
+
  if(canEdit){
   $('#chatWallpaper').value=(c.wallpaper||'shapes').startsWith('/uploads/')?'__custom':(c.wallpaper||'shapes');
   $('#saveChat').onclick=async()=>{try{let avatarUrl=c.avatar||'',wallpaper=$('#chatWallpaper').value;const f=$('#chatAvatarFile').files[0],wf=$('#chatWallpaperFile').files[0];if(f)avatarUrl=(await uploadFile(f,'image')).url;if(wf)wallpaper=(await uploadFile(wf,'image')).url;else if(wallpaper==='__custom')wallpaper=c.wallpaper||'shapes';await api('/api/chats/'+c.id,{method:'PATCH',body:JSON.stringify({title:$('#chatName').value,description:$('#chatDesc').value,avatar:avatarUrl,wallpaper})});closeModal();await loadChats();openChat(c.id);toast('Чат обновлён')}catch(e){toast(e.message)}};
