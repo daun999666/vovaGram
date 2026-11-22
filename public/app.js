@@ -170,13 +170,29 @@ async function loadSongs(){
  }catch(e){toast(e.message)}
 }
 function formatTime(value){if(!Number.isFinite(value)||value<0)return '00:00';const sec=Math.floor(value);return String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')}
-function updatePlayerLabels(){const a=$('#audioPlayer'),song=state.currentSong;$('#mediaTrackTitle').textContent=song?.title||'Выбери композицию';$('#mediaTrackSubtitle').textContent=song?'Личная медиатека':'Персональный плеер vovchikGram';$('#trackName').textContent=song?.title||'Нет трека';$('#mediaCurrent').textContent=formatTime(a.currentTime);$('#mediaDuration').textContent=formatTime(a.duration);$('#mediaPlayPause').textContent=a.paused?'▶':'Ⅱ';$('#mediaSeek').value=a.duration?Math.round(a.currentTime/a.duration*1000):0;$('#mediaSeek').style.setProperty('--seek-progress',(a.duration?a.currentTime/a.duration*100:0)+'%')}
+function updatePlayerLabels(){
+ const a=$('#audioPlayer'),song=state.currentSong,playing=!a.paused&&!!a.src;
+ $('#mediaTrackTitle').textContent=song?.title||'Выбери композицию';
+ $('#mediaTrackSubtitle').textContent=song?'Личная медиатека':'Персональный плеер vovchikGram';
+ $('#trackName').textContent=song?.title||'Нет трека';
+ $('#mediaCurrent').textContent=formatTime(a.currentTime);
+ $('#mediaDuration').textContent=formatTime(a.duration);
+ $('#mediaPlayPause').innerHTML='<span class="material-symbols-rounded">'+(playing?'pause':'play_arrow')+'</span>';
+ $('#mediaPlayPause').setAttribute('aria-label',playing?'Пауза':'Воспроизвести');
+ $('#mediaPlayPause').title=playing?'Пауза':'Воспроизвести';
+ $('#mediaWaveform')?.classList.toggle('is-playing',playing);
+ $('#playerDock').classList.toggle('is-playing',playing);
+ const progress=a.duration?Math.min(100,Math.max(0,a.currentTime/a.duration*100)):0;
+ $('#mediaSeek').value=Math.round(progress*10);
+ $('#mediaSeek').style.setProperty('--seek-progress',progress+'%');
+ $('#mediaWaveform')?.style.setProperty('--seek-progress',progress+'%');
+}
 function openMedia(){if(!state.user)return showAuth();const panel=$('#mediaPanel');clearTimeout(closeMedia.timer);panel.classList.remove('hidden');panel.classList.remove('media-panel-open');void panel.offsetWidth;panel.classList.add('media-panel-open');loadSongs()}
 function closeMedia(){const panel=$('#mediaPanel');panel.classList.remove('media-panel-open');clearTimeout(closeMedia.timer);closeMedia.timer=setTimeout(()=>panel.classList.add('hidden'),220)}
 function playSong(song){if(!song)return;state.currentSong=song;$('#playerDock').classList.remove('hidden');$('#audioPlayer').src=song.file_url;$('#audioPlayer').play().catch(()=>{});updatePlayerLabels();loadSongs()}
 function stepSong(delta){if(!state.songs.length)return;let i=state.songs.findIndex(x=>x.id===state.currentSong?.id);i=i<0?0:(i+delta+state.songs.length)%state.songs.length;playSong(state.songs[i])}
 $('#audioPlayer').addEventListener('timeupdate',updatePlayerLabels);$('#audioPlayer').addEventListener('durationchange',updatePlayerLabels);$('#audioPlayer').addEventListener('play',updatePlayerLabels);$('#audioPlayer').addEventListener('pause',updatePlayerLabels);$('#audioPlayer').addEventListener('ended',()=>stepSong(1));
-$('#mediaSeek').oninput=e=>{const a=$('#audioPlayer');if(a.duration)a.currentTime=a.duration*Number(e.target.value)/1000;updatePlayerLabels()};
+$('#mediaSeek').oninput=e=>{const a=$('#audioPlayer');if(a.duration)a.currentTime=a.duration*Number(e.target.value)/1000;const p=Number(e.target.value)/10+'%';e.target.style.setProperty('--seek-progress',p);$('#mediaWaveform')?.style.setProperty('--seek-progress',p);updatePlayerLabels()};
 $('#mediaPlayPause').onclick=()=>{const a=$('#audioPlayer');if(!a.src){if(state.songs[0])playSong(state.songs[0]);else toast('Сначала добавь трек');return}if(a.paused)a.play().catch(()=>{});else a.pause()};
 $('#mediaPrevious').onclick=()=>stepSong(-1);$('#mediaNext').onclick=()=>stepSong(1);$('#mediaSpeed').onchange=e=>$('#audioPlayer').playbackRate=Number(e.target.value);
 $('#mediaAddTrack').onclick=()=>$('#audioPicker').click();$('#dockOpenMedia').onclick=openMedia;$('#dockTrackOpen').onclick=openMedia;$('#closeMedia').onclick=closeMedia;
