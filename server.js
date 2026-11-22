@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS chat_drafts (user_id INTEGER NOT NULL,chat_id INTEGER
 CREATE TABLE IF NOT EXISTS hidden_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,hidden_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocked_users (blocker_id INTEGER NOT NULL,blocked_id INTEGER NOT NULL,blocked_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(blocker_id,blocked_id));
 CREATE TABLE IF NOT EXISTS chat_invites (token TEXT PRIMARY KEY,chat_id INTEGER NOT NULL,created_by INTEGER NOT NULL,expires_at TEXT,max_uses INTEGER DEFAULT 0,uses INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS scheduled_messages (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,body TEXT NOT NULL DEFAULT '',attachments TEXT DEFAULT '[]',scheduled_at INTEGER NOT NULL,status TEXT DEFAULT 'pending',sent_message_id INTEGER,error TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TRIGGER IF NOT EXISTS cleanup_deleted_message_references
 AFTER DELETE ON messages
 BEGIN
@@ -90,6 +91,7 @@ BEGIN
   DELETE FROM chat_drafts WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id;
   DELETE FROM chat_preferences WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id;
   DELETE FROM chat_invites WHERE chat_id=OLD.chat_id AND created_by=OLD.user_id;
+  UPDATE scheduled_messages SET status='cancelled',error='Автор покинул чат' WHERE chat_id=OLD.chat_id AND user_id=OLD.user_id AND status='pending';
   DELETE FROM hidden_messages
     WHERE user_id=OLD.user_id
       AND message_id IN (SELECT id FROM messages WHERE chat_id=OLD.chat_id);
@@ -102,6 +104,7 @@ BEGIN
   DELETE FROM chat_drafts WHERE chat_id=OLD.id;
   DELETE FROM chat_preferences WHERE chat_id=OLD.id;
   DELETE FROM chat_invites WHERE chat_id=OLD.id;
+  DELETE FROM scheduled_messages WHERE chat_id=OLD.id;
 END;
 `);
 function ensureColumn(table, column, definition) {
@@ -566,6 +569,46 @@ app.post("/api/chats/:id/messages",auth,(req,res)=>{
   res.json({message});
 });
 
+app.get("/api/chats/:id/scheduled",auth,(req,res)=>{
+  const chatId=Number(req.params.id);
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id))
+    return res.status(403).json({error:"Нет доступа"});
+  const messages=q(`SELECT id,chat_id,body,attachments,scheduled_at,status,error,created_at
+    FROM scheduled_messages WHERE chat_id=? AND user_id=? AND status IN ('pending','failed')
+    ORDER BY scheduled_at ASC LIMIT 100`).all(chatId,req.user.id);
+  res.json({messages});
+});
+app.post("/api/chats/:id/scheduled",auth,(req,res)=>{
+  const chatId=Number(req.params.id),body=sanitizeMessageBody(req.body.body,4000);
+  const rawAttachments=Array.isArray(req.body.attachments)?req.body.attachments.slice(0,8):[];
+  const attachments=rawAttachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"image"))
+    .map(a=>({url:a.url,mime:String(a.mime||"").slice(0,80),name:String(a.name||"image").slice(0,120)}));
+  if(!body&&!attachments.length) return res.status(400).json({error:"Добавь текст или изображение"});
+  const scheduledAt=Date.parse(String(req.body.scheduledAt||""));
+  if(!Number.isFinite(scheduledAt)||scheduledAt<Date.now()+1000||scheduledAt>Date.now()+30*24*60*60*1000)
+    return res.status(400).json({error:"Выбери время от одной секунды до 30 дней вперёд"});
+  const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!membership) return res.status(403).json({error:"Нет доступа"});
+  const chat=q("SELECT type FROM chats WHERE id=?").get(chatId);
+  if(!chat) return res.status(404).json({error:"Чат не найден"});
+  if(chat.type==="channel"&&!["owner","admin"].includes(membership.role)&&!["owner","dev"].includes(req.user.role))
+    return res.status(403).json({error:"Публиковать в канале могут только администраторы"});
+  if(chat.type==="direct"){
+    const other=q("SELECT user_id FROM members WHERE chat_id=? AND user_id<>? LIMIT 1").get(chatId,req.user.id);
+    if(other&&q("SELECT 1 FROM blocked_users WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)").get(req.user.id,other.user_id,other.user_id,req.user.id))
+      return res.status(403).json({error:"Нельзя планировать сообщение: один из участников заблокировал другого"});
+  }
+  const info=q("INSERT INTO scheduled_messages(chat_id,user_id,body,attachments,scheduled_at) VALUES(?,?,?,?,?)")
+    .run(chatId,req.user.id,body,JSON.stringify(attachments),Math.floor(scheduledAt/1000));
+  res.json({scheduled:{id:info.lastInsertRowid,chat_id:chatId,body,attachments,scheduled_at:Math.floor(scheduledAt/1000),status:"pending"}});
+});
+app.delete("/api/scheduled/:id",auth,(req,res)=>{
+  const id=Number(req.params.id),row=q("SELECT id,chat_id,status FROM scheduled_messages WHERE id=? AND user_id=?").get(id,req.user.id);
+  if(!row) return res.status(404).json({error:"Отложенное сообщение не найдено"});
+  if(row.status!=="pending") return res.status(409).json({error:"Это сообщение уже нельзя отменить"});
+  q("UPDATE scheduled_messages SET status='cancelled' WHERE id=? AND user_id=? AND status='pending'").run(id,req.user.id);
+  res.json({ok:true});
+});
 app.get("/api/search/messages",auth,(req,res)=>{
   const term=String(req.query.q||"").trim().slice(0,100);
   if(term.length<2) return res.json({messages:[]});
@@ -844,6 +887,55 @@ io.on("connection",(socket)=>{
     if(![...onlineUsers.values()].includes(userId)) emitPresenceToSharedUsers(userId,false);
   });
 });
+function processScheduledMessages(){
+  const now=Math.floor(Date.now()/1000);
+  const due=q("SELECT * FROM scheduled_messages WHERE status='pending' AND scheduled_at<=? ORDER BY scheduled_at,id LIMIT 25").all(now);
+  for(const row of due){
+    try{
+      const processOne=db.transaction(()=>{
+        const claimed=q("UPDATE scheduled_messages SET status='sending' WHERE id=? AND status='pending'").run(row.id);
+        if(!claimed.changes) return null;
+        const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(row.chat_id,row.user_id);
+        const chat=q("SELECT type FROM chats WHERE id=?").get(row.chat_id);
+        if(!membership||!chat){
+          q("UPDATE scheduled_messages SET status='failed',error='Нет доступа к чату' WHERE id=?").run(row.id);
+          return null;
+        }
+        if(chat.type==="channel"&&!["owner","admin"].includes(membership.role)&&!q("SELECT role FROM users WHERE id=? AND role IN ('owner','dev')").get(row.user_id)){
+          q("UPDATE scheduled_messages SET status='failed',error='Недостаточно прав для публикации' WHERE id=?").run(row.id);
+          return null;
+        }
+        if(chat.type==="direct"){
+          const other=q("SELECT user_id FROM members WHERE chat_id=? AND user_id<>? LIMIT 1").get(row.chat_id,row.user_id);
+          if(other&&q("SELECT 1 FROM blocked_users WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)").get(row.user_id,other.user_id,other.user_id,row.user_id)){
+            q("UPDATE scheduled_messages SET status='failed',error='Личный диалог недоступен из-за блокировки' WHERE id=?").run(row.id);
+            return null;
+          }
+        }
+        let attachments=[];
+        try{attachments=JSON.parse(row.attachments||"[]")}catch{}
+        const validAttachments=Array.isArray(attachments)?attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"image")):[];
+        const info=q("INSERT INTO messages(chat_id,user_id,body,attachments) VALUES(?,?,?,?)")
+          .run(row.chat_id,row.user_id,row.body,JSON.stringify(validAttachments));
+        const message=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+          m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
+          (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
+          u.username,u.display_name,u.avatar,u.role
+          FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id=?`).get(info.lastInsertRowid);
+        q("UPDATE scheduled_messages SET status='sent',sent_message_id=?,error=NULL WHERE id=?").run(message.id,row.id);
+        return {chatId:row.chat_id,message};
+      });
+      const result=processOne();
+      if(result) io.to("chat:"+result.chatId).emit("message",result.message);
+    }catch(error){
+      q("UPDATE scheduled_messages SET status='failed',error=? WHERE id=? AND status IN ('pending','sending')")
+        .run(String(error.message||"Ошибка отправки").slice(0,250),row.id);
+    }
+  }
+}
+q("UPDATE scheduled_messages SET status='pending' WHERE status='sending'");
+const scheduledDispatcher=setInterval(processScheduledMessages,1000);
+scheduledDispatcher.unref?.();
 server.listen(PORT,"0.0.0.0",()=>{
   console.log(`vovchikGram запущен: http://localhost:${PORT}`);
   console.log(`Локальная сеть: http://<IP-ВАШЕГО-ПК>:${PORT}`);
