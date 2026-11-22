@@ -13,6 +13,7 @@
   <button data-nav="group">♧ Создать группу</button>
   <button data-nav="channel">◈ Создать канал</button>
   <div class="nav-drawer-separator"></div>
+  <button data-nav="saved"><span class="material-symbols-rounded">bookmark</span> Избранное</button>
   <button data-nav="music">♫ Музыка и медиатека</button>
   <button data-nav="settings">⚙ Настройки</button>
   <button data-nav="dark">☾ Ночной режим <span id="drawerThemeState">Выкл.</span></button>
@@ -35,7 +36,10 @@
 <main class="main">
  <header class="topbar m3-app-bar"><button class="icon-btn mobile-only" id="openNav">☰</button><div id="topTitle"><b>Добро пожаловать</b><small>Выберите чат или создайте новый</small></div><div class="top-actions m3-toolbar" role="toolbar" aria-label="Действия приложения"><button id="headerSearch" class="icon-btn" title="Поиск">⌕</button><button id="playerBtn" class="icon-btn" title="Плеер">♫</button><button id="accountBtn" class="soft-btn">Войти</button><button id="profileBtn" class="avatar-button" title="Профиль">?</button></div></header>
  <section id="welcome" class="welcome"><div class="welcome-orb">v</div><h1>Твой круг общения.</h1><p>Создавай чаты, собирай каналы и настраивай пространство под себя.</p><button class="filled" id="welcomeCreate">＋ Создать чат</button><div class="welcome-hint">Material You · без подписок · без лишнего</div></section>
- <section id="conversation" class="conversation hidden"><div class="wallpaper" id="wallpaper"></div><div class="chat-banner" id="chatBanner"></div><div id="messages" class="messages"></div><div id="replyBar" class="reply-bar hidden"></div>
+ <section id="conversation" class="conversation hidden"><div class="wallpaper" id="wallpaper"></div><div class="chat-banner" id="chatBanner"></div>
+ <div id="pinnedMessageBanner" class="m3-pinned-banner hidden" role="status"></div>
+ <button id="loadMoreMessages" class="m3-load-older hidden" type="button"><span class="material-symbols-rounded">keyboard_double_arrow_up</span>Загрузить предыдущие сообщения</button>
+ <div id="messages" class="messages"></div><div id="replyBar" class="reply-bar hidden"></div>
  <form id="sendForm" class="composer"><button type="button" id="emojiBtn" class="icon-btn" title="Эмодзи">☺</button><button type="button" id="attachBtn" class="icon-btn" title="Прикрепить фото или файл">＋</button><input id="messageInput" autocomplete="off" placeholder="Написать сообщение…"><button class="send-btn" type="submit">➤</button></form><div id="emojiPicker" class="emoji-picker hidden"></div><input id="messageFilePicker" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><div id="attachmentPreview" class="attachment-preview hidden"></div>
  <div class="m3-fab-stack">
   <div id="chatFabMenu" class="m3-fab-menu hidden" role="menu" aria-label="Быстрые действия">
@@ -52,16 +56,13 @@
 <aside id="mediaPanel" class="media-panel hidden" aria-label="Медиатека">
  <div class="media-panel-head"><div><span class="eyebrow">VOVCHIKGRAM MUSIC</span><h2>Медиатека</h2></div><button id="closeMedia" class="icon-btn" title="Закрыть" aria-label="Закрыть"><span class="material-symbols-rounded">close</span></button></div>
  <div class="media-editor">
-  <div class="media-art">
-   <svg viewBox="0 0 640 150" role="img" aria-label="Волнообразная дорожка"><path class="media-snake-shadow" d="M8 75 C28 10 48 10 68 75 S108 140 128 75 S168 10 188 75 S228 140 248 75 S288 10 308 75 S348 140 368 75 S408 10 428 75 S468 140 488 75 S528 10 548 75 S588 140 632 75"/><path class="media-snake" d="M8 75 C28 10 48 10 68 75 S108 140 128 75 S168 10 188 75 S228 140 248 75 S288 10 308 75 S348 140 368 75 S408 10 428 75 S468 140 488 75 S528 10 548 75 S588 140 632 75"/></svg>
-  </div>
   <div class="media-track-title"><b id="mediaTrackTitle">Выбери композицию</b><small id="mediaTrackSubtitle">Личная коллекция</small></div>
   <div class="media-timeline" id="mediaTimeline">
    <div class="media-waveform" id="mediaWaveform" aria-hidden="true">
-    <svg viewBox="0 0 960 64" preserveAspectRatio="none">
-     <path class="media-wave-base" d="M0 32 C20 3 40 3 60 32 C80 61 100 61 120 32 C140 3 160 3 180 32 C200 61 220 61 240 32 C260 3 280 3 300 32 C320 61 340 61 360 32 C380 3 400 3 420 32 C440 61 460 61 480 32 C500 3 520 3 540 32 C560 61 580 61 600 32 C620 3 640 3 660 32 C680 61 700 61 720 32 C740 3 760 3 780 32 C800 61 820 61 840 32 C860 3 880 3 900 32 C920 61 940 61 960 32"/>
-     <path class="media-wave-active" d="M0 32 C20 3 40 3 60 32 C80 61 100 61 120 32 C140 3 160 3 180 32 C200 61 220 61 240 32 C260 3 280 3 300 32 C320 61 340 61 360 32 C380 3 400 3 420 32 C440 61 460 61 480 32 C500 3 520 3 540 32 C560 61 580 61 600 32 C620 3 640 3 660 32 C680 61 700 61 720 32 C740 3 760 3 780 32 C800 61 820 61 840 32 C860 3 880 3 900 32 C920 61 940 61 960 32"/>
-     <path class="media-wave-flow" d="M0 32 C20 3 40 3 60 32 C80 61 100 61 120 32 C140 3 160 3 180 32 C200 61 220 61 240 32 C260 3 280 3 300 32 C320 61 340 61 360 32 C380 3 400 3 420 32 C440 61 460 61 480 32 C500 3 520 3 540 32 C560 61 580 61 600 32 C620 3 640 3 660 32 C680 61 700 61 720 32 C740 3 760 3 780 32 C800 61 820 61 840 32 C860 3 880 3 900 32 C920 61 940 61 960 32"/>
+    <svg viewBox="0 0 600 24" preserveAspectRatio="none" aria-hidden="true">
+     <path class="media-wave-base" d="M0 12 C 12 4 13 4 25 12 S 38 20 50 12 C 62 4 63 4 75 12 S 88 20 100 12 C 112 4 113 4 125 12 S 138 20 150 12 C 162 4 163 4 175 12 S 188 20 200 12 C 212 4 213 4 225 12 S 238 20 250 12 C 262 4 263 4 275 12 S 288 20 300 12 C 312 4 313 4 325 12 S 338 20 350 12 C 362 4 363 4 375 12 S 388 20 400 12 C 412 4 413 4 425 12 S 438 20 450 12 C 462 4 463 4 475 12 S 488 20 500 12 C 512 4 513 4 525 12 S 538 20 550 12 C 562 4 563 4 575 12 S 588 20 600 12"/>
+     <path class="media-wave-active" d="M0 12 C 12 4 13 4 25 12 S 38 20 50 12 C 62 4 63 4 75 12 S 88 20 100 12 C 112 4 113 4 125 12 S 138 20 150 12 C 162 4 163 4 175 12 S 188 20 200 12 C 212 4 213 4 225 12 S 238 20 250 12 C 262 4 263 4 275 12 S 288 20 300 12 C 312 4 313 4 325 12 S 338 20 350 12 C 362 4 363 4 375 12 S 388 20 400 12 C 412 4 413 4 425 12 S 438 20 450 12 C 462 4 463 4 475 12 S 488 20 500 12 C 512 4 513 4 525 12 S 538 20 550 12 C 562 4 563 4 575 12 S 588 20 600 12"/>
+     <path class="media-wave-flow" d="M0 12 C 12 4 13 4 25 12 S 38 20 50 12 C 62 4 63 4 75 12 S 88 20 100 12 C 112 4 113 4 125 12 S 138 20 150 12 C 162 4 163 4 175 12 S 188 20 200 12 C 212 4 213 4 225 12 S 238 20 250 12 C 262 4 263 4 275 12 S 288 20 300 12 C 312 4 313 4 325 12 S 338 20 350 12 C 362 4 363 4 375 12 S 388 20 400 12 C 412 4 413 4 425 12 S 438 20 450 12 C 462 4 463 4 475 12 S 488 20 500 12 C 512 4 513 4 525 12 S 538 20 550 12 C 562 4 563 4 575 12 S 588 20 600 12"/>
     </svg>
     <span class="media-wave-playhead"></span>
    </div>
