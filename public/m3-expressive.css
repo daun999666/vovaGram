@@ -861,3 +861,9 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .m3-member-id{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
 :where(button,input,textarea,select,a,[tabindex]):focus-visible{outline:2px solid var(--primary)!important;outline-offset:3px}
 @media(prefers-reduced-motion:reduce){.message-date-divider,.media-wave-range{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+.send-as-channel{display:flex;align-items:center;gap:9px;width:max-content;max-width:100%;margin:0 14px 8px;padding:8px 12px;border:1px solid var(--outline-variant);border-radius:999px;background:var(--surface-container);color:var(--on-surface);font-size:12px;font-weight:650;cursor:pointer}
+.send-as-channel input{accent-color:var(--primary)}
+.send-as-channel .material-symbols-rounded{font-size:17px;color:var(--primary)}
+.channel-view-count{display:inline-flex;align-items:center;gap:3px;margin-left:8px;color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums}
+.channel-view-count .material-symbols-rounded{font-size:13px}
