@@ -427,6 +427,7 @@ app.delete("/api/users/:id/block",auth,(req,res)=>{
 });
 app.get("/api/chats",auth,(req,res)=>{
   const chats=q(`SELECT c.*,m.role AS my_role,
+    (SELECT COUNT(*) FROM members cm WHERE cm.chat_id=c.id) AS member_count,
     (SELECT body FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_message,
     (SELECT created_at FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_time,
     (SELECT COUNT(*) FROM messages um LEFT JOIN chat_reads cr ON cr.chat_id=um.chat_id AND cr.user_id=?
@@ -545,6 +546,7 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
     CASE WHEN m.sender_as_channel=1 THEN c.title ELSE u.display_name END AS display_name,
     CASE WHEN m.sender_as_channel=1 THEN c.avatar ELSE u.avatar END AS avatar,
     CASE WHEN m.sender_as_channel=1 THEN NULL ELSE u.role END AS role,
+    CASE WHEN m.sender_as_channel=1 THEN NULL ELSE (SELECT cm.role FROM members cm WHERE cm.chat_id=m.chat_id AND cm.user_id=m.user_id) END AS chat_role,
     CASE WHEN m.sender_as_channel=1 THEN 1 ELSE 0 END AS sender_is_channel,
     CASE WHEN m.user_id=? THEN 1 ELSE 0 END AS is_mine,
     (SELECT COUNT(*) FROM chat_reads cr WHERE cr.chat_id=m.chat_id AND cr.user_id<>m.user_id AND cr.last_read_message_id>=m.id) AS read_by_count,
@@ -616,6 +618,16 @@ app.post("/api/chats/:id/invites",auth,(req,res)=>{
   q("INSERT INTO chat_invites(token,chat_id,created_by,expires_at,max_uses) VALUES(?,?,?,?,?)")
     .run(token,chatId,req.user.id,expiresAt,maxUses);
   res.json({invite:{token,chatId,expiresAt,maxUses,uses:0}});
+});
+app.delete("/api/chats/:id/invites/:token",auth,(req,res)=>{
+  const chatId=Number(req.params.id),token=String(req.params.token||"");
+  const actor=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!actor) return res.status(403).json({error:"Нет доступа"});
+  if(!["owner","admin"].includes(actor.role)&&!["owner","dev"].includes(req.user.role))
+    return res.status(403).json({error:"Недостаточно прав"});
+  const removed=q("DELETE FROM chat_invites WHERE chat_id=? AND token=?").run(chatId,token);
+  if(!removed.changes) return res.status(404).json({error:"Приглашение не найдено"});
+  res.json({ok:true,revoked:true});
 });
 app.get("/api/invites/:token",(req,res)=>{
   const invite=q("SELECT * FROM chat_invites WHERE token=?").get(String(req.params.token||""));
@@ -837,6 +849,7 @@ app.post("/api/chats/:id/messages",auth,(req,res)=>{
     CASE WHEN m.sender_as_channel=1 THEN c.title ELSE u.display_name END AS display_name,
     CASE WHEN m.sender_as_channel=1 THEN c.avatar ELSE u.avatar END AS avatar,
     CASE WHEN m.sender_as_channel=1 THEN NULL ELSE u.role END AS role,
+    CASE WHEN m.sender_as_channel=1 THEN NULL ELSE (SELECT cm.role FROM members cm WHERE cm.chat_id=m.chat_id AND cm.user_id=m.user_id) END AS chat_role,
     CASE WHEN m.sender_as_channel=1 THEN 1 ELSE 0 END AS sender_is_channel,
     CASE WHEN m.user_id=? THEN 1 ELSE 0 END AS is_mine
     FROM messages m JOIN users u ON u.id=m.user_id JOIN chats c ON c.id=m.chat_id WHERE m.id=?`).get(req.user.id,info.lastInsertRowid);
