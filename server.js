@@ -873,8 +873,18 @@ app.post("/api/chats/:id/messages",auth,(req,res)=>{
   if(!body&&!validAttachments.length) return res.status(400).json({error:"Добавь текст или изображение"});
   const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
   if(!membership) return res.status(403).json({error:"Нет доступа"});
-  const chat=q("SELECT type,slow_mode_seconds FROM chats WHERE id=?").get(id);
+  const chat=q("SELECT type,slow_mode_seconds,new_member_restriction_seconds FROM chats WHERE id=?").get(id);
   const chatType=chat?.type;
+  const joined=q("SELECT joined_at FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
+  if(chatType==="group"&&Number(chat?.new_member_restriction_seconds)>0&&membership.role==="member"&&joined?.joined_at){
+    const joinedAt=Date.parse(String(joined.joined_at).replace(" ","T")+"Z");
+    const elapsed=Math.floor((Date.now()-joinedAt)/1000);
+    const retryAfter=Math.max(0,Number(chat.new_member_restriction_seconds)-elapsed);
+    if(retryAfter>0)return res.status(429).json({error:"Для новых участников действует ограничение. Подожди "+retryAfter+" сек.",retryAfter});
+  }
+  const restriction=q("SELECT restricted_until FROM chat_member_restrictions WHERE chat_id=? AND user_id=?").get(id,req.user.id);
+  if(restriction&&restriction.restricted_until>Math.floor(Date.now()/1000))return res.status(403).json({error:"Администратор временно ограничил отправку сообщений"});
+  if(restriction)q("DELETE FROM chat_member_restrictions WHERE chat_id=? AND user_id=?").run(id,req.user.id);
   if(chatType==="direct"){
     const other=q("SELECT user_id FROM members WHERE chat_id=? AND user_id<>? LIMIT 1").get(id,req.user.id);
     if(other&&q("SELECT 1 FROM blocked_users WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)").get(req.user.id,other.user_id,other.user_id,req.user.id))
