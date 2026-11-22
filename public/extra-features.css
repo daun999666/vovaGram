@@ -34,3 +34,11 @@ button,input,textarea,select,.chat-item,.message-content p,.message-content,.top
 .font-upload-card>b{font-size:13px}.font-upload-card>small,.font-upload-card>span{line-height:1.5}
 .font-upload-card .upload-label,.font-upload-card>button{width:max-content;max-width:100%;cursor:pointer}
 .chat-clock{font-variant-numeric:tabular-nums}
+
+/* Global UI typography scaling and readable expressive weights */
+:root{font-size:calc(16px * var(--font-scale,1))}
+body{font-size:1rem;font-weight:650}
+body :where(button,input,textarea,select,label,p,small,b,strong,h1,h2,h3,h4,a){font-weight:600}
+.welcome h1,.brand-copy b,.topbar #topTitle>b,.vg-extra-panel h2{font-weight:800!important}
+.sidebar,.main,.topbar,.chat-banner,.chat-meta,.composer,.modal,.modal-content,.profile-side,.nav-drawer,.vg-extra-panel,.vg-extra-grid{font-size:1rem}
+.message-content p{font-weight:650!important}

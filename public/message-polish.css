@@ -50,3 +50,10 @@
 /* 49 */ .messages>.message+.message{margin-top:1px!important}
 /* 50 */ .message-content .sender .message-role-chip{font-weight:800;letter-spacing:.01em}
 @media(max-width:600px){.message.m3-message{max-width:calc(100% - 42px)!important}.message.m3-message .message-content{max-width:100%}.message-content p{font-size:14px}.message-avatar,.message-avatar .sender-avatar{width:29px;height:29px}.message-avatar{flex-basis:29px}}
+
+/* Keep incoming bubbles left and own bubbles right, including after responsive rules */
+.message.m3-message:not(.mine){align-self:flex-start!important;margin-left:0!important;margin-right:auto!important}
+.message.m3-message.mine{align-self:flex-end!important;margin-left:auto!important;margin-right:0!important}
+.message-avatar .sender-avatar{display:grid!important;place-items:center!important;text-align:center;line-height:1!important}
+.message-menu-trigger{opacity:1!important;pointer-events:auto!important;transform:none!important}
+.message.is-actions-open .message-content .message-actions{display:flex!important;visibility:visible!important;pointer-events:auto!important}

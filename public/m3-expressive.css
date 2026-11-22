@@ -1112,3 +1112,12 @@ body{font-weight:650;font-variation-settings:'wght' 650,'opsz' 14}
  .message-menu-trigger{right:-32px;width:28px;height:28px}
  .message-content .message-actions{min-width:180px}
 }
+
+/* Stable chat alignment, centered initial avatars and compact action menu */
+.messages{align-items:stretch!important}
+.messages>.message.m3-message:not(.mine){align-self:flex-start!important;margin-left:0!important;margin-right:auto!important}
+.messages>.message.m3-message.mine{align-self:flex-end!important;margin-left:auto!important;margin-right:0!important}
+.message-avatar .sender-avatar{display:grid!important;place-items:center!important;text-align:center;line-height:1!important;padding:0!important;overflow:hidden}
+.message-menu-trigger{opacity:1!important;pointer-events:auto!important;transform:none!important}
+.message-content .message-actions{display:none!important}
+.message.is-actions-open .message-content .message-actions{display:flex!important}
