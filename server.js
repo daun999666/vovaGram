@@ -71,12 +71,15 @@ CREATE TABLE IF NOT EXISTS chat_pins (chat_id INTEGER NOT NULL,message_id INTEGE
 CREATE TABLE IF NOT EXISTS saved_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,saved_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS chat_preferences (user_id INTEGER NOT NULL,chat_id INTEGER NOT NULL,archived INTEGER DEFAULT 0,starred INTEGER DEFAULT 0,muted INTEGER DEFAULT 0,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chat_id));
 CREATE TABLE IF NOT EXISTS message_edits (id INTEGER PRIMARY KEY AUTOINCREMENT,message_id INTEGER NOT NULL,edited_by INTEGER NOT NULL,body TEXT NOT NULL,edited_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS chat_drafts (user_id INTEGER NOT NULL,chat_id INTEGER NOT NULL,body TEXT NOT NULL DEFAULT '',updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chat_id));
+CREATE TABLE IF NOT EXISTS hidden_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,hidden_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
 CREATE TRIGGER IF NOT EXISTS cleanup_deleted_message_references
 AFTER DELETE ON messages
 BEGIN
   DELETE FROM chat_pins WHERE message_id=OLD.id;
   DELETE FROM saved_messages WHERE message_id=OLD.id;
   DELETE FROM message_edits WHERE message_id=OLD.id;
+  DELETE FROM hidden_messages WHERE message_id=OLD.id;
 END;
 `);
 function ensureColumn(table, column, definition) {
@@ -252,7 +255,8 @@ app.get("/api/chats",auth,(req,res)=>{
     (SELECT body FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_message,
     (SELECT created_at FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_time,
     (SELECT COUNT(*) FROM messages um LEFT JOIN chat_reads cr ON cr.chat_id=um.chat_id AND cr.user_id=?
-      WHERE um.chat_id=c.id AND um.id>COALESCE(cr.last_read_message_id,0) AND um.user_id<>?) AS unread_count,
+      WHERE um.chat_id=c.id AND um.id>COALESCE(cr.last_read_message_id,0) AND um.user_id<>?
+        AND NOT EXISTS(SELECT 1 FROM hidden_messages hm WHERE hm.user_id=? AND hm.message_id=um.id)) AS unread_count,
     (SELECT message_id FROM chat_pins WHERE chat_id=c.id ORDER BY pinned_at DESC,message_id DESC LIMIT 1) AS pinned_message_id,
     (SELECT m2.user_id FROM members m2 WHERE m2.chat_id=c.id AND m2.user_id<>? LIMIT 1) AS peer_user_id,
     COALESCE(cp.archived,0) AS is_archived,
@@ -261,7 +265,7 @@ app.get("/api/chats",auth,(req,res)=>{
     FROM chats c JOIN members m ON m.chat_id=c.id
     LEFT JOIN chat_preferences cp ON cp.chat_id=c.id AND cp.user_id=m.user_id
     WHERE m.user_id=?
-    ORDER BY COALESCE(cp.starred,0) DESC,COALESCE(last_time,c.created_at) DESC`).all(req.user.id,req.user.id,req.user.id,req.user.id);
+    ORDER BY COALESCE(cp.starred,0) DESC,COALESCE(last_time,c.created_at) DESC`).all(req.user.id,req.user.id,req.user.id,req.user.id,req.user.id);
   const onlineIds=new Set([...onlineUsers.values()]);
   for(const chat of chats){
     if(chat.type==="direct") chat.peer_online=onlineIds.has(chat.peer_user_id);
@@ -314,13 +318,39 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
     u.username,u.display_name,u.avatar,u.role,
     (SELECT COUNT(*) FROM chat_reads cr WHERE cr.chat_id=m.chat_id AND cr.user_id<>m.user_id AND cr.last_read_message_id>=m.id) AS read_by_count,
     EXISTS(SELECT 1 FROM chat_pins cp WHERE cp.chat_id=m.chat_id AND cp.message_id=m.id) AS is_pinned
-    FROM messages m JOIN users u ON u.id=m.user_id WHERE m.chat_id=?`;
+    FROM messages m JOIN users u ON u.id=m.user_id WHERE m.chat_id=? AND NOT EXISTS(SELECT 1 FROM hidden_messages hm WHERE hm.user_id=? AND hm.message_id=m.id)`;
   const rows=before
-    ? q(select+" AND m.id<? ORDER BY m.id DESC LIMIT ?").all(id,before,limit+1)
-    : q(select+" ORDER BY m.id DESC LIMIT ?").all(id,limit+1);
+    ? q(select+" AND m.id<? ORDER BY m.id DESC LIMIT ?").all(id,req.user.id,before,limit+1)
+    : q(select+" ORDER BY m.id DESC LIMIT ?").all(id,req.user.id,limit+1);
   const hasMore=rows.length>limit;
   const messages=rows.slice(0,limit).reverse();
   res.json({messages,hasMore,nextCursor:messages[0]?.id||null});
+});
+app.get("/api/chats/:id/draft",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:"Некорректный ID чата"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
+  const draft=q("SELECT body,updated_at FROM chat_drafts WHERE user_id=? AND chat_id=?").get(req.user.id,id);
+  res.json({draft:draft||{body:"",updated_at:null}});
+});
+app.put("/api/chats/:id/draft",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:"Некорректный ID чата"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
+  const body=String(req.body.body||"").slice(0,4000);
+  if(!body.trim()){
+    q("DELETE FROM chat_drafts WHERE user_id=? AND chat_id=?").run(req.user.id,id);
+    return res.json({ok:true,empty:true});
+  }
+  q(`INSERT INTO chat_drafts(user_id,chat_id,body) VALUES(?,?,?)
+    ON CONFLICT(user_id,chat_id) DO UPDATE SET body=excluded.body,updated_at=CURRENT_TIMESTAMP`).run(req.user.id,id,body);
+  res.json({ok:true,updated:true});
+});
+app.delete("/api/chats/:id/draft",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
+  q("DELETE FROM chat_drafts WHERE user_id=? AND chat_id=?").run(req.user.id,id);
+  res.json({ok:true});
 });
 app.post("/api/chats/:id/read",auth,(req,res)=>{
   const id=Number(req.params.id);
@@ -418,9 +448,10 @@ app.get("/api/search/messages",auth,(req,res)=>{
     JOIN users u ON u.id=m.user_id
     JOIN chats c ON c.id=m.chat_id
     WHERE m.body LIKE ? COLLATE NOCASE
+      AND NOT EXISTS(SELECT 1 FROM hidden_messages hm WHERE hm.user_id=? AND hm.message_id=m.id)
       AND (?=0 OR m.chat_id=?)
       AND (?=0 OR m.id<?)
-    ORDER BY m.id DESC LIMIT ?`).all(req.user.id,pattern,chatId,chatId,before,before,limit);
+    ORDER BY m.id DESC LIMIT ?`).all(req.user.id,pattern,req.user.id,chatId,chatId,before,before,limit);
   res.json({messages});
 });
 app.get("/api/search",auth,(req,res)=>{
@@ -523,6 +554,25 @@ app.delete("/api/messages/:id",auth,(req,res)=>{
   if(!m) return res.status(404).json({error:"Сообщение не найдено"});
   if(m.user_id!==req.user.id && !["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Можно удалять только свои сообщения"});
   q("DELETE FROM messages WHERE id=?").run(id); io.to("chat:"+m.chat_id).emit("message-deleted",{id,chat_id:m.chat_id}); res.json({ok:true});
+});
+app.post("/api/messages/:id/hide",auth,(req,res)=>{
+  const id=Number(req.params.id),message=q("SELECT id,chat_id FROM messages WHERE id=?").get(id);
+  if(!message) return res.status(404).json({error:"Сообщение не найдено"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(message.chat_id,req.user.id))
+    return res.status(403).json({error:"Нет доступа"});
+  q("INSERT OR IGNORE INTO hidden_messages(user_id,message_id) VALUES(?,?)").run(req.user.id,id);
+  res.json({ok:true,hidden:true});
+});
+app.delete("/api/messages/:id/hide",auth,(req,res)=>{
+  q("DELETE FROM hidden_messages WHERE user_id=? AND message_id=?").run(req.user.id,Number(req.params.id));
+  res.json({ok:true,hidden:false});
+});
+app.get("/api/hidden-messages",auth,(req,res)=>{
+  const rows=q(`SELECT m.id,m.chat_id,m.body,m.created_at,c.title AS chat_title
+    FROM hidden_messages h JOIN messages m ON m.id=h.message_id JOIN chats c ON c.id=m.chat_id
+    JOIN members mine ON mine.chat_id=m.chat_id AND mine.user_id=?
+    WHERE h.user_id=? ORDER BY h.hidden_at DESC LIMIT 200`).all(req.user.id,req.user.id);
+  res.json({messages:rows});
 });
 app.post("/api/messages/:id/reaction",auth,(req,res)=>{
   const id=Number(req.params.id), m=q("SELECT * FROM messages WHERE id=?").get(id);
