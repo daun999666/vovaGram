@@ -1,0 +1,42 @@
+name: Verify vovchikGram 2.0
+on:
+  push:
+    branches: [v2.0.0-dev]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies and refresh lockfile
+        run: npm install
+      - name: Check syntax and run tests
+        run: npm run check
+  windows-package:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Verify syntax and tests
+        run: npm run check
+      - name: Build Windows EXE
+        run: npm run build:win
+      - name: Upload v2 development build
+        uses: actions/upload-artifact@v4
+        with:
+          name: vovchikGram-2.0.0-dev-Windows-x64
+          path: dist/vovchikGram.exe
+          if-no-files-found: error
