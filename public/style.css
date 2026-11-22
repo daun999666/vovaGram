@@ -162,3 +162,34 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 @media(hover:none){.message .message-actions{opacity:0}}
 
 /* v1.6 workspace panel */
+
+
+/* v1.7 stability layer: predictable Material-style layout across chats, channels and settings */
+:root{--font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+html,body,#app{width:100%;min-width:0;max-width:100%;overflow:hidden}
+#app{grid-template-columns:minmax(248px,300px) minmax(0,1fr)}
+.main,.conversation,.chat-banner,.topbar,.messages,.composer,.profile-side,.media-panel{min-width:0;max-width:100%}
+.messages{padding:16px clamp(12px,2vw,28px)!important;align-items:stretch!important;gap:12px}
+.messages>.message.vg-left-message,
+.messages>.message.vg-left-message.mine{display:flex!important;flex-direction:row!important;align-self:flex-start!important;align-items:flex-end!important;gap:8px;width:fit-content;max-width:min(78%,760px);margin:0!important;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:var(--text)!important}
+.vg-message-avatar{width:34px;height:34px;flex:0 0 34px;align-self:flex-end}
+.vg-message-avatar .sender-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover}
+.vg-message-content{min-width:0;max-width:100%;padding:10px 13px;border-radius:18px 18px 18px 5px;background:var(--bubble);color:var(--text);overflow-wrap:anywhere;word-break:normal}
+.message.mine .vg-message-content{background:color-mix(in srgb,var(--primary) 88%,#202030);color:#fff;border-radius:18px 18px 5px 18px}
+.vg-message-content .sender{display:block;max-width:100%;overflow-wrap:anywhere}
+.vg-message-content p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}
+.vg-message-content .message-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.vg-message-content .message-actions{display:flex;gap:3px;flex-wrap:wrap}
+.chat-banner .banner-avatar{flex:0 0 38px}
+.chat-banner>div:nth-child(2){min-width:0;flex:1}
+#folderTabs,.folder-tabs{min-width:0;max-width:100%;overflow-x:auto;scrollbar-width:thin}
+#folderTabs button{flex:0 0 auto;white-space:nowrap}
+.modal,.modal-content,.settings-panel,.profile-side,.media-panel{min-width:0;max-width:100%}
+.modal-content{max-height:min(72dvh,720px);overflow:auto;overscroll-behavior:contain}
+#vg16-panel,#vg16-panel *,.vg16-menu,.vg16-menu *{font-family:var(--font-family)!important;box-sizing:border-box}
+#vg16-panel{min-width:0;max-width:min(360px,38vw);overflow:auto;overscroll-behavior:contain}
+#vg16-panel .card,#vg16-panel input,#vg16-panel textarea,#vg16-panel button{max-width:100%;min-width:0}
+#vg16-panel textarea{width:100%;resize:vertical}
+button,input,textarea,select{font-family:inherit}
+@media(max-width:900px){#app{grid-template-columns:minmax(0,1fr)}.sidebar{position:absolute;inset:0 auto 0 0;width:min(320px,88vw);transform:translateX(-105%);transition:transform .2s}.sidebar.open{transform:translateX(0)}#vg16-panel{position:fixed;right:0;top:0;bottom:0;width:min(360px,92vw);max-width:92vw;z-index:30}.messages>.message.vg-left-message,.messages>.message.vg-left-message.mine{max-width:92%}}
+@media(max-width:560px){.topbar{padding:0 10px}.messages{padding:12px 8px!important}.vg-message-avatar{width:28px;height:28px;flex-basis:28px}.vg-message-avatar .sender-avatar{width:28px;height:28px}.messages>.message.vg-left-message,.messages>.message.vg-left-message.mine{max-width:96%}}
