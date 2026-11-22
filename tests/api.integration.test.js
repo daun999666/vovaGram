@@ -298,6 +298,16 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   });
   assert.equal(inviteCreated.status, 200);
   const inviteToken = inviteCreated.body.invite.token;
+  const revocableInvite = await request(baseUrl, ownerToken, `/api/chats/${chatId}/invites`, {
+    method: "POST", body: JSON.stringify({ expiresInSeconds: 3600, maxUses: 0 })
+  });
+  assert.equal(revocableInvite.status, 200);
+  const revokedInvite = await request(baseUrl, ownerToken, `/api/chats/${chatId}/invites/${revocableInvite.body.invite.token}`, {
+    method: "DELETE"
+  });
+  assert.equal(revokedInvite.status, 200);
+  const revokedInvitePreview = await request(baseUrl, null, `/api/invites/${revocableInvite.body.invite.token}`);
+  assert.equal(revokedInvitePreview.status, 404);
   const invitePreview = await request(baseUrl, null, `/api/invites/${inviteToken}`);
   assert.equal(invitePreview.status, 200);
   assert.equal(invitePreview.body.invite.valid, true);
