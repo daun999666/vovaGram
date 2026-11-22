@@ -193,6 +193,15 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(second.status, 200);
   assert.equal(third.status, 200);
 
+  const reactionAdded = await request(baseUrl, memberToken, `/api/messages/${second.body.message.id}/reaction`, {
+    method: "POST", body: JSON.stringify({ emoji: "🔥" })
+  });
+  assert.equal(reactionAdded.status, 200);
+  const reactionUsers = await request(baseUrl, ownerToken, `/api/messages/${second.body.message.id}/reactions?emoji=%F0%9F%94%A5`);
+  assert.equal(reactionUsers.status, 200);
+  assert.equal(reactionUsers.body.users.length, 1);
+  assert.equal(reactionUsers.body.users[0].username, "v2member" + suffix);
+
   const latest = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages?limit=2`);
   assert.equal(latest.status, 200);
   assert.deepEqual(latest.body.messages.map(x => x.body), ["second message", "third message"]);
@@ -312,6 +321,8 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const privateSearch = await request(baseUrl, outsider.body.token, "/api/search/messages?q=second%20message");
   assert.equal(privateSearch.status, 200);
   assert.equal(privateSearch.body.messages.length, 0);
+  const privateReactionUsers = await request(baseUrl, outsider.body.token, `/api/messages/${second.body.message.id}/reactions?emoji=%F0%9F%94%A5`);
+  assert.equal(privateReactionUsers.status, 404);
   const deniedDraft = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/draft`);
   assert.equal(deniedDraft.status, 403);
   const deniedSchedule = await request(baseUrl, outsider.body.token, `/api/chats/${chatId}/scheduled`, {
