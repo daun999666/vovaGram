@@ -9,6 +9,7 @@ const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 const { Server } = require("socket.io");
 const { spawn } = require("child_process");
+const { cleanUsername, boundedInteger, sanitizeMessageBody, isValidUploadPath } = require("./src/shared/validation");
 
 // Tiny .env loader so the project does not need an extra runtime dependency.
 const envCandidates = process.pkg
@@ -63,6 +64,9 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS songs (id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,title TEXT NOT NULL,file_url TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS chat_reads (chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_read_message_id INTEGER NOT NULL DEFAULT 0,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,user_id));
+CREATE TABLE IF NOT EXISTS chat_pins (chat_id INTEGER NOT NULL,message_id INTEGER NOT NULL,pinned_by INTEGER NOT NULL,pinned_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,message_id));
+CREATE TABLE IF NOT EXISTS saved_messages (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,saved_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,message_id));
 `);
 function ensureColumn(table, column, definition) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(x=>x.name);
@@ -95,9 +99,6 @@ function auth(req,res,next) {
 function admin(req,res,next) {
   if (!["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Недостаточно прав"});
   next();
-}
-function cleanUsername(v) {
-  return String(v || "").trim().replace(/^@/,"").toLowerCase();
 }
 function uniqueNumber() {
   let n;
@@ -138,7 +139,7 @@ migrateOwnerNumber();
 app.use(express.json({limit:"22mb"}));
 app.use("/uploads", express.static(uploadDir, { fallthrough:false, dotfiles:"deny", index:false }));
 app.use(express.static(path.join(__dirname,"public")));
-app.get("/api/health", (req,res)=>res.json({ok:true, app:"vovchikGram", version:"1.4.2"}));
+app.get("/api/health", (req,res)=>res.json({ok:true, app:"vovchikGram", version:"2.0.0-dev"}));
 
 app.post("/api/register", (req,res)=>{
   const username = cleanUsername(req.body.username);
@@ -231,8 +232,18 @@ app.post("/api/dm",auth,(req,res)=>{
 app.get("/api/chats",auth,(req,res)=>{
   const chats=q(`SELECT c.*,m.role AS my_role,
     (SELECT body FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_message,
-    (SELECT created_at FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_time
-    FROM chats c JOIN members m ON m.chat_id=c.id WHERE m.user_id=? ORDER BY COALESCE(last_time,c.created_at) DESC`).all(req.user.id);
+    (SELECT created_at FROM messages WHERE chat_id=c.id ORDER BY id DESC LIMIT 1) last_time,
+    (SELECT COUNT(*) FROM messages um LEFT JOIN chat_reads cr ON cr.chat_id=um.chat_id AND cr.user_id=?
+      WHERE um.chat_id=c.id AND um.id>COALESCE(cr.last_read_message_id,0) AND um.user_id<>?) AS unread_count,
+    (SELECT message_id FROM chat_pins WHERE chat_id=c.id ORDER BY pinned_at DESC,message_id DESC LIMIT 1) AS pinned_message_id,
+    (SELECT m2.user_id FROM members m2 WHERE m2.chat_id=c.id AND m2.user_id<>? LIMIT 1) AS peer_user_id
+    FROM chats c JOIN members m ON m.chat_id=c.id WHERE m.user_id=?
+    ORDER BY COALESCE(last_time,c.created_at) DESC`).all(req.user.id,req.user.id,req.user.id,req.user.id);
+  const onlineIds=new Set([...onlineUsers.values()]);
+  for(const chat of chats){
+    if(chat.type==="direct") chat.peer_online=onlineIds.has(chat.peer_user_id);
+    else chat.peer_online=false;
+  }
   res.json({chats});
 });
 app.post("/api/chats",auth,(req,res)=>{
@@ -252,15 +263,87 @@ app.post("/api/chats",auth,(req,res)=>{
 });
 app.get("/api/chats/:id/messages",auth,(req,res)=>{
   const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:"Некорректный ID чата"});
   if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
-  const messages=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,u.username,u.display_name,u.avatar,u.role
-    FROM messages m JOIN users u ON u.id=m.user_id WHERE m.chat_id=? ORDER BY m.id DESC LIMIT 100`).all(id).reverse();
+  const before=boundedInteger(req.query.before,0,0,Number.MAX_SAFE_INTEGER);
+  const limit=boundedInteger(req.query.limit,50,1,100);
+  const select=`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
+    u.username,u.display_name,u.avatar,u.role,
+    (SELECT COUNT(*) FROM chat_reads cr WHERE cr.chat_id=m.chat_id AND cr.user_id<>m.user_id AND cr.last_read_message_id>=m.id) AS read_by_count,
+    EXISTS(SELECT 1 FROM chat_pins cp WHERE cp.chat_id=m.chat_id AND cp.message_id=m.id) AS is_pinned
+    FROM messages m JOIN users u ON u.id=m.user_id WHERE m.chat_id=?`;
+  const rows=before
+    ? q(select+" AND m.id<? ORDER BY m.id DESC LIMIT ?").all(id,before,limit+1)
+    : q(select+" ORDER BY m.id DESC LIMIT ?").all(id,limit+1);
+  const hasMore=rows.length>limit;
+  const messages=rows.slice(0,limit).reverse();
+  res.json({messages,hasMore,nextCursor:messages[0]?.id||null});
+});
+app.post("/api/chats/:id/read",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:"Некорректный ID чата"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
+  const last=q("SELECT COALESCE(MAX(id),0) AS id FROM messages WHERE chat_id=?").get(id).id;
+  q(`INSERT INTO chat_reads(chat_id,user_id,last_read_message_id) VALUES(?,?,?)
+    ON CONFLICT(chat_id,user_id) DO UPDATE SET
+    last_read_message_id=MAX(chat_reads.last_read_message_id,excluded.last_read_message_id),
+    updated_at=CURRENT_TIMESTAMP`).run(id,req.user.id,last);
+  io.to("chat:"+id).emit("chat-read",{chatId:id,userId:req.user.id,lastReadMessageId:last});
+  res.json({ok:true,lastReadMessageId:last});
+});
+app.get("/api/chats/:id/pins",auth,(req,res)=>{
+  const id=Number(req.params.id);
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
+  const pins=q(`SELECT m.id,m.chat_id,m.body,m.created_at,m.user_id,u.username,u.display_name,u.avatar,p.pinned_by,p.pinned_at
+    FROM chat_pins p JOIN messages m ON m.id=p.message_id JOIN users u ON u.id=m.user_id
+    WHERE p.chat_id=? ORDER BY p.pinned_at DESC,p.message_id DESC`).all(id);
+  res.json({pins});
+});
+app.post("/api/chats/:id/pins/:messageId",auth,(req,res)=>{
+  const chatId=Number(req.params.id),messageId=Number(req.params.messageId);
+  const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!membership) return res.status(403).json({error:"Нет доступа"});
+  const chat=q("SELECT type FROM chats WHERE id=?").get(chatId);
+  if(!chat) return res.status(404).json({error:"Чат не найден"});
+  if(chat.type!=="direct"&&!["owner","admin"].includes(membership.role)&&!["owner","dev"].includes(req.user.role))
+    return res.status(403).json({error:"Закреплять сообщения могут администраторы"});
+  if(!q("SELECT 1 FROM messages WHERE id=? AND chat_id=?").get(messageId,chatId)) return res.status(404).json({error:"Сообщение не найдено"});
+  q("INSERT OR IGNORE INTO chat_pins(chat_id,message_id,pinned_by) VALUES(?,?,?)").run(chatId,messageId,req.user.id);
+  io.to("chat:"+chatId).emit("pins-updated",{chatId});
+  res.json({ok:true,pinned:true});
+});
+app.delete("/api/chats/:id/pins/:messageId",auth,(req,res)=>{
+  const chatId=Number(req.params.id),messageId=Number(req.params.messageId);
+  const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(chatId,req.user.id);
+  if(!membership) return res.status(403).json({error:"Нет доступа"});
+  const chat=q("SELECT type FROM chats WHERE id=?").get(chatId);
+  if(chat?.type!=="direct"&&!["owner","admin"].includes(membership.role)&&!["owner","dev"].includes(req.user.role))
+    return res.status(403).json({error:"Откреплять сообщения могут администраторы"});
+  q("DELETE FROM chat_pins WHERE chat_id=? AND message_id=?").run(chatId,messageId);
+  io.to("chat:"+chatId).emit("pins-updated",{chatId});
+  res.json({ok:true,pinned:false});
+});
+app.get("/api/saved",auth,(req,res)=>{
+  const messages=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,u.username,u.display_name,u.avatar,c.title AS chat_title,s.saved_at
+    FROM saved_messages s JOIN messages m ON m.id=s.message_id JOIN users u ON u.id=m.user_id
+    JOIN chats c ON c.id=m.chat_id WHERE s.user_id=? ORDER BY s.saved_at DESC LIMIT 500`).all(req.user.id);
   res.json({messages});
 });
+app.post("/api/messages/:id/save",auth,(req,res)=>{
+  const id=Number(req.params.id),m=q("SELECT id,chat_id FROM messages WHERE id=?").get(id);
+  if(!m) return res.status(404).json({error:"Сообщение не найдено"});
+  if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(m.chat_id,req.user.id)) return res.status(403).json({error:"Нет доступа"});
+  q("INSERT OR IGNORE INTO saved_messages(user_id,message_id) VALUES(?,?)").run(req.user.id,id);
+  res.json({ok:true,saved:true});
+});
+app.delete("/api/messages/:id/save",auth,(req,res)=>{
+  q("DELETE FROM saved_messages WHERE user_id=? AND message_id=?").run(req.user.id,Number(req.params.id));
+  res.json({ok:true,saved:false});
+});
 app.post("/api/chats/:id/messages",auth,(req,res)=>{
-  const id=Number(req.params.id), body=String(req.body.body||"").trim().slice(0,4000);
+  const id=Number(req.params.id), body=sanitizeMessageBody(req.body.body,4000);
   const attachments=Array.isArray(req.body.attachments)?req.body.attachments.slice(0,8):[];
-  const validAttachments=attachments.filter(a=>a&&typeof a.url==="string"&&/^\/uploads\/[a-f0-9]+\.(png|jpg|webp|gif)$/.test(a.url)).map(a=>({url:a.url,mime:String(a.mime||"").slice(0,80),name:String(a.name||"image").slice(0,120)}));
+  const validAttachments=attachments.filter(a=>a&&typeof a.url==="string"&&isValidUploadPath(a.url,"image")).map(a=>({url:a.url,mime:String(a.mime||"").slice(0,80),name:String(a.name||"image").slice(0,120)}));
   if(!body&&!validAttachments.length) return res.status(400).json({error:"Добавь текст или изображение"});
   const membership=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
   if(!membership) return res.status(403).json({error:"Нет доступа"});
@@ -325,7 +408,7 @@ app.patch("/api/messages/:id",auth,(req,res)=>{
   const id=Number(req.params.id), m=q("SELECT * FROM messages WHERE id=?").get(id);
   if(!m) return res.status(404).json({error:"Сообщение не найдено"});
   if(m.user_id!==req.user.id && !["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Можно изменять только свои сообщения"});
-  const body=String(req.body.body||"").trim().slice(0,4000); if(!body) return res.status(400).json({error:"Пустое сообщение"});
+  const body=sanitizeMessageBody(req.body.body,4000); if(!body) return res.status(400).json({error:"Пустое сообщение"});
   q("UPDATE messages SET body=?,edited_at=CURRENT_TIMESTAMP WHERE id=?").run(body,id);
   const updated=q("SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,u.username,u.display_name,u.avatar,u.role FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id=?").get(id);
   io.to("chat:"+m.chat_id).emit("message-updated",updated); res.json({message:updated});
@@ -441,12 +524,25 @@ io.use((socket,next)=>{
   } catch { next(new Error("unauthorized")); }
 });
 io.on("connection",(socket)=>{
-  onlineUsers.set(socket.id,socket.user.id);
+  const userId=socket.user.id;
+  const alreadyOnline=[...onlineUsers.values()].includes(userId);
+  onlineUsers.set(socket.id,userId);
+  socket.emit("presence-snapshot",{userIds:[...new Set(onlineUsers.values())]});
+  if(!alreadyOnline) socket.broadcast.emit("presence-update",{userId,online:true});
   socket.on("join-chat",(id)=>{
     id=Number(id);
-    if(q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,socket.user.id)) socket.join("chat:"+id);
+    if(Number.isSafeInteger(id)&&id>0&&q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(id,userId)) socket.join("chat:"+id);
   });
-  socket.on("disconnect",()=>onlineUsers.delete(socket.id));
+  socket.on("typing",payload=>{
+    const chatId=Number(payload?.chatId);
+    if(!Number.isSafeInteger(chatId)||chatId<1) return;
+    if(!q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(chatId,userId)) return;
+    socket.to("chat:"+chatId).emit("typing",{chatId,userId,username:socket.user.username,displayName:socket.user.display_name,typing:!!payload.typing});
+  });
+  socket.on("disconnect",()=>{
+    onlineUsers.delete(socket.id);
+    if(![...onlineUsers.values()].includes(userId)) io.emit("presence-update",{userId,online:false});
+  });
 });
 server.listen(PORT,"0.0.0.0",()=>{
   console.log(`vovchikGram запущен: http://localhost:${PORT}`);
