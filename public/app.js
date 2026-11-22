@@ -229,7 +229,7 @@ async function openSavedMessages(){
 }
 function m3Icon(name){return '<span class="material-symbols-rounded" aria-hidden="true">'+name+'</span>'}
 function formatMessageBody(value){
- return esc(String(value||'')).replace(/(https?:\\/\\/[^\\s<]+)/g,url=>'<a href="'+url.replace(/["']/g,'')+'" target="_blank" rel="noopener noreferrer">'+url+'</a>');
+ return esc(String(value||'')).replace(/(https?:\/\/[^\s<]+)/g,url=>'<a href="'+url.replace(/["']/g,'')+'" target="_blank" rel="noopener noreferrer">'+url+'</a>');
 }
 function addMessage(m,{prepend=false}={}){
  const old=$('#msg-'+m.id);if(old)old.remove();
@@ -281,8 +281,8 @@ function addMessage(m,{prepend=false}={}){
  quoteButton.onclick=()=>{
   const quote=el.dataset.selectedQuote||'';
   if(!quote)return;
-  const input=$('#messageInput'),prefix='> '+quote.split('\\n').join('\\n> ')+'\\n\\n';
-  input.value=(input.value?input.value+'\\n':'')+prefix;
+  const input=$('#messageInput'),prefix='> '+quote.split('\n').join('\n> ')+'\n\n';
+  input.value=(input.value?input.value+'\n':'')+prefix;
   input.dispatchEvent(new Event('input',{bubbles:true}));input.focus();quoteButton.hidden=true;
  };
  el.querySelector('[data-copy]').onclick=async()=>{try{await navigator.clipboard.writeText(m.body||'Изображение');toast('Скопировано')}catch{toast('Браузер запретил копирование')}};
@@ -417,14 +417,19 @@ let searchTimer;$('#searchInput').oninput=()=>{
   try{
    const results=await Promise.all([
     api('/api/search?q='+encodeURIComponent(term)),
-    api('/api/search/messages?q='+encodeURIComponent(term)+'&limit=20')
+    api('/api/search/messages?q='+encodeURIComponent(term)+'&limit=20'),
+    api('/api/channels?q='+encodeURIComponent(term))
    ]);
-   const peopleAndChats=results[0],messageResults=results[1],box=$('#searchResults');
+   const peopleAndChats=results[0],messageResults=results[1],channelResults=results[2],box=$('#searchResults');
    const users=peopleAndChats.users.map(u=>'<button data-user="'+esc(u.username)+'">'+avatar(u.avatar,u.display_name,'result-avatar')+'<span><b>'+esc(u.display_name)+'</b><small>@'+esc(u.username)+'</small></span></button>');
    const chats=peopleAndChats.chats.map(c=>'<button data-chat="'+c.id+'">'+avatar(c.avatar,c.title,'result-avatar')+'<span><b>'+esc(c.title)+'</b><small>'+(c.type==='channel'?'Канал':'Чат')+'</small></span></button>');
    const messages=(messageResults.messages||[]).map(m=>'<button data-message-chat="'+m.chat_id+'" data-message-id="'+m.id+'"><span class="result-avatar message-search-icon"><span class="material-symbols-rounded">chat</span></span><span><b>'+esc(m.chat_title)+' · '+esc(m.display_name||m.username)+'</b><small>'+esc(String(m.body||'').slice(0,110))+'</small></span></button>');
-   box.innerHTML=users.concat(chats,messages).join('')||'<p class="empty">Ничего не найдено</p>';
+   const channels=(channelResults.channels||[]).map(channel=>'<button data-public-channel="'+channel.id+'">'+avatar(channel.avatar,channel.title,'result-avatar')+'<span><b>'+esc(channel.title)+'</b><small>@'+esc(channel.username)+' · '+Number(channel.member_count)+' подписчиков</small></span><span class="material-symbols-rounded">campaign</span></button>');
+   box.innerHTML=users.concat(chats,channels,messages).join('')||'<p class="empty">Ничего не найдено</p>';
    box.classList.remove('hidden');
+   box.querySelectorAll('[data-public-channel]').forEach(b=>b.onclick=async()=>{
+    try{await api('/api/channels/'+b.dataset.publicChannel+'/subscribe',{method:'POST',body:'{}'});await loadChats();box.classList.add('hidden');openChat(Number(b.dataset.publicChannel));toast('Канал добавлен в список')}catch(error){toast(error.message)}
+   });
    box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');findUser(b.dataset.user)});
    box.querySelectorAll('[data-chat]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');openChat(+b.dataset.chat)});
    box.querySelectorAll('[data-message-id]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');jumpToMessage(+b.dataset.messageChat,+b.dataset.messageId)});
