@@ -505,3 +505,18 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
  .media-panel.is-playing .media-art .media-snake,.m3-indeterminate-wave{animation:none!important}
  *,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important}
 }
+
+
+/* Shared upload status works from chat composer and media library */
+.m3-transfer-progress{
+ position:fixed!important;right:22px;bottom:22px;width:min(380px,calc(100vw - 32px))!important;
+ margin:0!important;padding:11px 14px 9px!important;z-index:80;
+ background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(22px);
+ border:1px solid color-mix(in srgb,var(--outline) 62%,transparent);
+ border-radius:22px;box-shadow:var(--m3-shadow-2);
+}
+.m3-transfer-label{font-size:12px;font-weight:600}
+.m3-chat-loading,.m3-loading-row{display:flex;align-items:center;justify-content:center;gap:12px;padding:18px;color:var(--muted);font-size:12px}
+.m3-chat-loading{align-self:center;margin:auto}
+.m3-loading-row{justify-content:flex-start;padding:20px 10px}
+@media(max-width:560px){.m3-transfer-progress{right:12px;bottom:12px;width:calc(100vw - 24px)!important}}
