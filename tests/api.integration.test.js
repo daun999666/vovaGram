@@ -84,6 +84,35 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(b.status, 200, JSON.stringify(b.body));
   const ownerToken = a.body.token, memberToken = b.body.token;
 
+  const direct = await request(baseUrl, ownerToken, "/api/dm", {
+    method: "POST", body: JSON.stringify({ username: "v2member" + suffix })
+  });
+  assert.equal(direct.status, 200);
+  const blocked = await request(baseUrl, ownerToken, `/api/users/${b.body.user.id}/block`, {
+    method: "POST", body: "{}"
+  });
+  assert.equal(blocked.status, 200);
+  const blockedList = await request(baseUrl, ownerToken, "/api/blocks");
+  assert.equal(blockedList.body.users.some(x => x.id === b.body.user.id), true);
+  const deniedNewDm = await request(baseUrl, ownerToken, "/api/dm", {
+    method: "POST", body: JSON.stringify({ username: "v2member" + suffix })
+  });
+  assert.equal(deniedNewDm.status, 403);
+  const deniedDirectMessage = await request(baseUrl, memberToken, `/api/chats/${direct.body.chat.id}/messages`, {
+    method: "POST", body: JSON.stringify({ body: "blocked message" })
+  });
+  assert.equal(deniedDirectMessage.status, 403);
+  const blockedSearch = await request(baseUrl, ownerToken, "/api/search?q=v2member" + suffix);
+  assert.equal(blockedSearch.body.users.some(x => x.id === b.body.user.id), false);
+  const unblocked = await request(baseUrl, ownerToken, `/api/users/${b.body.user.id}/block`, {
+    method: "DELETE", body: "{}"
+  });
+  assert.equal(unblocked.status, 200);
+  const dmAfterUnblock = await request(baseUrl, ownerToken, "/api/dm", {
+    method: "POST", body: JSON.stringify({ username: "v2member" + suffix })
+  });
+  assert.equal(dmAfterUnblock.status, 200);
+
   const created = await request(baseUrl, ownerToken, "/api/chats", {
     method: "POST",
     body: JSON.stringify({ title: "v2 integration", type: "group", members: ["v2member" + suffix] })
