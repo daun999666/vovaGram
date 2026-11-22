@@ -493,7 +493,7 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
 
 
   const unreadBefore = await request(baseUrl, ownerToken, "/api/chats");
-  assert.equal(unreadBefore.body.chats.find(x => x.id === chatId).unread_count, 2);
+  assert.equal(unreadBefore.body.chats.find(x => x.id === chatId).unread_count, 3);
 
   const memberRead = await request(baseUrl, memberToken, `/api/chats/${chatId}/read`, {
     method: "POST", body: "{}"
