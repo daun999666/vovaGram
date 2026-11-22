@@ -266,7 +266,7 @@ function addMessage(m,{prepend=false}={}){
   reply+(m.body?'<p>'+formatMessageBody(m.body)+'</p>':'')+media+
   '<div class="message-foot"><time>'+time+(m.edited_at?' · изм.':'')+'</time>'+(state.active?.type==='channel'&&Number(m.view_count)>0?'<small class="channel-view-count">'+m3Icon('visibility')+' '+Number(m.view_count)+'</small>':'')+
   (mine?'<button type="button" class="message-read" data-readers title="'+(Number(m.read_by_count)>0?'Кто прочитал':'Отправлено')+'" aria-label="Кто прочитал">'+m3Icon(Number(m.read_by_count)>0?'done_all':'done')+'</button>':'')+
-  forwardCount+'<span class="message-actions">'+
+  forwardCount+'</div><div class="reactions">'+react+'</div><span class="message-actions" role="group" aria-label="Действия с сообщением">'+
   '<button data-quote-selection class="message-quote-selection" hidden>Цитировать выделенное</button>'+
   '<button data-copy title="Копировать" aria-label="Копировать">'+m3Icon('content_copy')+'</button>'+
   '<button data-message-link title="Скопировать ссылку" aria-label="Скопировать ссылку">'+m3Icon('link')+'</button>'+
@@ -279,9 +279,36 @@ function addMessage(m,{prepend=false}={}){
   ((state.active?.type==='direct'||['owner','admin'].includes(state.active?.my_role)||['owner','dev'].includes(state.user?.role))?'<button data-pin data-pinned="'+(m.is_pinned?'true':'false')+'" title="'+(m.is_pinned?'Открепить':'Закрепить')+'" aria-label="Закрепить сообщение">'+m3Icon('push_pin')+'</button>':'')+
   '<button data-react-open title="Реакция" aria-label="Реакция">'+m3Icon('add_reaction')+'</button>'+
   (mine?'<button data-edit title="Изменить" aria-label="Изменить">'+m3Icon('edit')+'</button><button data-delete title="Удалить" aria-label="Удалить">'+m3Icon('delete')+'</button>':'')+
-  '</span></div><div class="reactions">'+react+'</div></div>';
+  '</span></div>'+'<button type="button" class="message-menu-trigger" data-menu-toggle aria-label="Действия с сообщением" aria-haspopup="true" aria-expanded="false" title="Действия с сообщением">'+m3Icon('more_vert')+'</button>';
  const selectButton=el.querySelector('[data-select-message]');
- selectButton.onclick=()=>toggleMessageSelection(m.id);
+ if(selectButton)selectButton.onclick=()=>toggleMessageSelection(m.id);
+ const menuToggle=el.querySelector('[data-menu-toggle]');
+ menuToggle.onclick=event=>{
+  event.stopPropagation();
+  document.querySelectorAll('.message.is-actions-open').forEach(open=>{
+   if(open!==el){open.classList.remove('is-actions-open');open.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded','false')}
+  });
+  const opened=el.classList.toggle('is-actions-open');
+  menuToggle.setAttribute('aria-expanded',String(opened));
+ };
+ el.querySelectorAll('.message-actions button').forEach(button=>button.addEventListener('click',()=>{
+  el.classList.remove('is-actions-open');
+  menuToggle.setAttribute('aria-expanded','false');
+ }));
+ if(!state.messageMenuListener){
+  state.messageMenuListener=true;
+  document.addEventListener('click',event=>{
+   const targetMessage=event.target.closest('.message');
+   document.querySelectorAll('.message.is-actions-open').forEach(open=>{
+    if(open!==targetMessage){open.classList.remove('is-actions-open');open.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded','false')}
+   });
+  });
+  document.addEventListener('keydown',event=>{
+   if(event.key==='Escape')document.querySelectorAll('.message.is-actions-open').forEach(open=>{
+    open.classList.remove('is-actions-open');open.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded','false')
+   });
+  });
+ }
  const quoteButton=el.querySelector('[data-quote-selection]');
  el.addEventListener('mouseup',()=>{
   const selection=window.getSelection(),selected=selection?.toString().trim();
