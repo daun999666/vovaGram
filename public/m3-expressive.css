@@ -747,3 +747,16 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .chat-pin-mark{display:inline-flex;vertical-align:-2px;margin-left:4px;color:var(--primary)}
 .chat-pin-mark .material-symbols-rounded{font-size:13px;margin:0}
 #toggleChatPin .material-symbols-rounded{font-size:17px;margin:0}
+
+
+/* Reaction participants */
+.reaction-entry{display:inline-flex;align-items:center;gap:2px;padding:2px 4px;border:1px solid var(--m3-outline);border-radius:var(--m3-shape-full);background:var(--m3-container-high)}
+.reaction-entry .reaction{border:0;background:transparent;padding:2px 5px}
+.reaction-users{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:transparent;color:var(--muted)}
+.reaction-users:hover{background:var(--surface3);color:var(--primary)}
+.reaction-users .material-symbols-rounded{font-size:15px;margin:0}
+.m3-reaction-users{display:flex;flex-direction:column;gap:7px;max-height:min(55vh,460px);overflow:auto}
+.m3-reaction-user{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px;background:var(--surface2)}
+.m3-reaction-user>span:last-child{display:flex;flex-direction:column;gap:2px}
+.m3-reaction-user b{font-size:12px}
+.m3-reaction-user small{font-size:10px;color:var(--muted)}
