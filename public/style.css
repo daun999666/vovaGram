@@ -193,3 +193,6 @@ html,body,#app{width:100%;min-width:0;max-width:100%;overflow:hidden}
 button,input,textarea,select{font-family:inherit}
 @media(max-width:900px){#app{grid-template-columns:minmax(0,1fr)}.sidebar{position:absolute;inset:0 auto 0 0;width:min(320px,88vw);transform:translateX(-105%);transition:transform .2s}.sidebar.open{transform:translateX(0)}#vg16-panel{position:fixed;right:0;top:0;bottom:0;width:min(360px,92vw);max-width:92vw;z-index:30}.messages>.message.vg-left-message,.messages>.message.vg-left-message.mine{max-width:92%}}
 @media(max-width:560px){.topbar{padding:0 10px}.messages{padding:12px 8px!important}.vg-message-avatar{width:28px;height:28px;flex-basis:28px}.vg-message-avatar .sender-avatar{width:28px;height:28px}.messages>.message.vg-left-message,.messages>.message.vg-left-message.mine{max-width:96%}}
+
+.vg-m3-icon{font-family:'Material Symbols Rounded';font-weight:normal;font-style:normal;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-flex;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-feature-settings:'liga';-webkit-font-smoothing:antialiased;align-items:center;justify-content:center;vertical-align:middle}
+#vg16-panel,#vg16-panel *{font-family:var(--font-family)!important}
