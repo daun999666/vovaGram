@@ -193,4 +193,26 @@ function initSocket(){state.socket?.disconnect();state.socket=io({auth:{token:st
 async function init(){try{if(!state.token){showAuth();return}await refreshMe();applyTheme(state.user.theme||state.theme);applyUI();await loadChats();initSocket()}catch(e){localStorage.removeItem('vg_token');state.token=null;state.user=null;showAuth()}}
 $('#newChat').onclick=createChat;$('#welcomeCreate').onclick=createChat;$('#settingsBtn').onclick=settings;$('#drawerProfile').onclick=()=>state.user?profileSide():showAuth();$('#profileBtn').onclick=()=>state.user?profileSide():showAuth();$('#accountBtn').onclick=()=>state.user?settings():showAuth();$('#menuPlayer').onclick=openMedia;$('#playerBtn').onclick=()=>$('#playerDock').classList.toggle('hidden');$('#closePlayer').onclick=()=>$('#playerDock').classList.add('hidden');$('#emojiBtn').onclick=openEmoji;$('#attachBtn').onclick=()=>$('#messageFilePicker').click();$('#messageFilePicker').onchange=e=>{addMessageFiles([...e.target.files]);e.target.value=''};$('#sendForm').onsubmit=async e=>{e.preventDefault();await sendCurrentMessage()};document.addEventListener('paste',e=>{if(!state.active)return;const items=[...(e.clipboardData?.items||[])];const images=items.filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(images.length){e.preventDefault();addMessageFiles(images)}});
 $('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}});
+
+function installMaterialIconFont(){
+ const glyphs=[['☰','menu'],['⌕','search'],['＋','add'],['⚙','settings'],['♫','music_note'],['☾','dark_mode'],['◉','account_circle'],['♧','group_add'],['◈','campaign'],['☺','sentiment_satisfied'],['➤','send'],['▢','content_copy'],['↩','reply'],['✎','edit'],['×','close'],['▶','play_arrow'],['Ⅱ','pause'],['↶','skip_previous'],['↷','skip_next'],['☆','star'],['★','star'],['⌖','push_pin'],['➦','forward'],['🔔','notifications'],['🔕','notifications_off']];
+ const scan=root=>{
+  if(!root||!root.querySelectorAll)return;
+  root.querySelectorAll('button').forEach(button=>{
+   if(button.dataset.m3Iconized==='1')return;
+   const node=[...button.childNodes].find(n=>n.nodeType===Node.TEXT_NODE&&n.textContent.trim());
+   if(!node)return;
+   const raw=node.textContent,trimmed=raw.trimStart();
+   const found=glyphs.find(([glyph])=>trimmed.startsWith(glyph));
+   if(!found)return;
+   const icon=document.createElement('span');icon.className='material-symbols-rounded';icon.setAttribute('aria-hidden','true');icon.textContent=found[1];
+   node.replaceWith(icon,document.createTextNode(raw.slice(0,raw.indexOf(trimmed))+trimmed.slice(found[0].length)));
+   button.dataset.m3Iconized='1';
+  });
+ };
+ scan(document);
+ new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{if(node.nodeType===Node.ELEMENT_NODE)scan(node)}))).observe(document.body,{childList:true,subtree:true});
+}
+
+installMaterialIconFont();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});applyTheme(state.theme);applyUI();setWallpaper(state.wallpaper);init();
