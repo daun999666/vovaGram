@@ -900,3 +900,9 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .command-search{width:100%;margin:0 0 12px;padding:12px 14px;border:1px solid var(--outline-variant);border-radius:14px;background:var(--surface-container);color:var(--on-surface);font:inherit}
 .command-item[hidden]{display:none}
 @media(max-width:680px){.connection-status{padding:5px 7px;font-size:0}.connection-status i{width:8px;height:8px}.top-actions{gap:4px}}
+
+.chat-time{position:relative}
+.chat-quick-action{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin-left:5px;border-radius:50%;color:var(--muted);font-size:19px;line-height:1;opacity:.45;cursor:pointer;vertical-align:middle}
+.chat-item:hover .chat-quick-action,.chat-quick-action:focus-visible{opacity:1;background:var(--surface-container-high);color:var(--primary)}
+.chat-quick-action:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.m3-member-row img[loading="lazy"],.chat-item img[loading="lazy"]{content-visibility:auto}
