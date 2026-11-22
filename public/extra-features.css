@@ -42,3 +42,6 @@ body :where(button,input,textarea,select,label,p,small,b,strong,h1,h2,h3,h4,a){f
 .welcome h1,.brand-copy b,.topbar #topTitle>b,.vg-extra-panel h2{font-weight:800!important}
 .sidebar,.main,.topbar,.chat-banner,.chat-meta,.composer,.modal,.modal-content,.profile-side,.nav-drawer,.vg-extra-panel,.vg-extra-grid{font-size:1rem}
 .message-content p{font-weight:650!important}
+
+/* Letter-only avatars must be centered; image avatars keep their crop */
+.avatar:not(.image-avatar),.chat-avatar:not(.image-avatar),.sender-avatar:not(.image-avatar),.banner-avatar:not(.image-avatar),.top-avatar:not(.image-avatar),.nav-avatar:not(.image-avatar){display:grid!important;place-items:center!important;text-align:center!important;line-height:1!important;padding:0!important}
