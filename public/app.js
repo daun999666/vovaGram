@@ -210,7 +210,44 @@ async function createChat(defaultType='group'){
  $('#createSubmit').onclick=async()=>{const d=Object.fromEntries(new FormData($('#createForm')));d.members=d.members.split(',').map(x=>x.trim().replace(/^@/,'')).filter(Boolean);try{const r=await api('/api/chats',{method:'POST',body:JSON.stringify(d)});closeModal();await loadChats();openChat(r.chat.id)}catch(e){toast(e.message)}};
 }
 async function findUser(name){try{const r=await api('/api/users/'+encodeURIComponent(name.replace(/^@/,'')));const u=r.user;const m=modal('Профиль пользователя',`@${esc(u.username)}`,`<div class="public-profile">${avatar(u.avatar,u.displayName,'public-avatar')}<h3>${esc(u.displayName)} ${badge(u)}</h3><p>@${esc(u.username)} · ${esc(u.number||'')}</p><p>${esc(u.bio||'Описание не добавлено')}</p></div>`,'<button class="soft-btn" data-close>Закрыть</button><button class="filled" id="startDM">Написать</button>');$('#startDM').onclick=async()=>{try{const x=await api('/api/dm',{method:'POST',body:JSON.stringify({username:u.username})});closeModal();await loadChats();openChat(x.chat.id)}catch(e){toast(e.message)}}}catch(e){toast(e.message)}}
-let searchTimer;$('#searchInput').oninput=()=>{clearTimeout(searchTimer);const q=$('#searchInput').value.trim();if(q.length<2){$('#searchResults').classList.add('hidden');return}searchTimer=setTimeout(async()=>{try{const d=await api('/api/search?q='+encodeURIComponent(q));const box=$('#searchResults');box.innerHTML=[...d.users.map(u=>`<button data-user="${esc(u.username)}">${avatar(u.avatar,u.display_name,'result-avatar')}<span><b>${esc(u.display_name)}</b><small>@${esc(u.username)}</small></span></button>`),...d.chats.map(c=>`<button data-chat="${c.id}">${avatar(c.avatar,c.title,'result-avatar')}<span><b>${esc(c.title)}</b><small>${c.type==='channel'?'Канал':'Чат'}</small></span></button>`)].join('')||'<p class="empty">Ничего не найдено</p>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');findUser(b.dataset.user)});box.querySelectorAll('[data-chat]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');openChat(+b.dataset.chat)})}catch(e){toast(e.message)}},250)};
+async function jumpToMessage(chatId,messageId){
+ const targetChat=state.chats.find(c=>c.id===Number(chatId));
+ if(!targetChat){toast('Чат больше недоступен');return}
+ if(state.active?.id!==Number(chatId))await openChat(Number(chatId));
+ let target=document.getElementById('msg-'+messageId),guard=0;
+ while(!target&&state.messageHasMore&&guard<40){
+  await loadOlderMessages();
+  target=document.getElementById('msg-'+messageId);
+  guard++;
+ }
+ if(target){
+  target.scrollIntoView({behavior:'smooth',block:'center'});
+  target.classList.add('m3-search-hit');
+  setTimeout(()=>target.classList.remove('m3-search-hit'),1400);
+ }else toast('Сообщение не найдено в истории');
+}
+let searchTimer;$('#searchInput').oninput=()=>{
+ clearTimeout(searchTimer);
+ const term=$('#searchInput').value.trim();
+ if(term.length<2){$('#searchResults').classList.add('hidden');return}
+ searchTimer=setTimeout(async()=>{
+  try{
+   const results=await Promise.all([
+    api('/api/search?q='+encodeURIComponent(term)),
+    api('/api/search/messages?q='+encodeURIComponent(term)+'&limit=20')
+   ]);
+   const peopleAndChats=results[0],messageResults=results[1],box=$('#searchResults');
+   const users=peopleAndChats.users.map(u=>'<button data-user="'+esc(u.username)+'">'+avatar(u.avatar,u.display_name,'result-avatar')+'<span><b>'+esc(u.display_name)+'</b><small>@'+esc(u.username)+'</small></span></button>');
+   const chats=peopleAndChats.chats.map(c=>'<button data-chat="'+c.id+'">'+avatar(c.avatar,c.title,'result-avatar')+'<span><b>'+esc(c.title)+'</b><small>'+(c.type==='channel'?'Канал':'Чат')+'</small></span></button>');
+   const messages=(messageResults.messages||[]).map(m=>'<button data-message-chat="'+m.chat_id+'" data-message-id="'+m.id+'"><span class="result-avatar message-search-icon"><span class="material-symbols-rounded">chat</span></span><span><b>'+esc(m.chat_title)+' · '+esc(m.display_name||m.username)+'</b><small>'+esc(String(m.body||'').slice(0,110))+'</small></span></button>');
+   box.innerHTML=users.concat(chats,messages).join('')||'<p class="empty">Ничего не найдено</p>';
+   box.classList.remove('hidden');
+   box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');findUser(b.dataset.user)});
+   box.querySelectorAll('[data-chat]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');openChat(+b.dataset.chat)});
+   box.querySelectorAll('[data-message-id]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');jumpToMessage(+b.dataset.messageChat,+b.dataset.messageId)});
+  }catch(e){toast(e.message)}
+ },250);
+};
 function setTransferProgress(progress,label){
  const box=$('#transferProgress');if(!box)return;
  const indicator=$('#transferWave');
