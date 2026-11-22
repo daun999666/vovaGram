@@ -237,10 +237,14 @@ app.delete("/api/sessions/:id",auth,(req,res)=>{
   res.json({ok:true});
 });
 app.post("/api/sessions/revoke-others",auth,(req,res)=>{
-  const rows=q("SELECT id FROM auth_sessions WHERE user_id=? AND revoked_at='' AND id<>?").all(req.user.id,req.sessionId);
   const update=q("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at='' AND id<>?").run(req.user.id,req.sessionId);
-  for(const socket of io.sockets.sockets.values())if(socket.user.id===req.user.id&&socket.sessionId!==req.sessionId)socket.disconnect(true);
+  for(const socket of io.sockets.sockets.values())if(socket.user?.id===req.user.id&&socket.sessionId!==req.sessionId)socket.disconnect(true);
   res.json({ok:true,revoked:update.changes});
+});
+app.post("/api/logout",auth,(req,res)=>{
+  q("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND revoked_at=''").run(req.sessionId,req.user.id);
+  for(const socket of io.sockets.sockets.values())if(socket.sessionId===req.sessionId)socket.disconnect(true);
+  res.json({ok:true});
 });
 app.get("/api/me",auth,(req,res)=>res.json({
   user:publicUser(req.user),
