@@ -659,16 +659,16 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(sixthRegistration.status, 429);
   for (let attempt=0; attempt<4; attempt++) {
     const failed = await request(baseUrl, null, "/api/login", {
-      method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "wrong-password" })
+      method: "POST", body: JSON.stringify({ username: "v2outside" + suffix, password: "wrong-password" })
     });
     assert.equal(failed.status, 401);
   }
   const locked = await request(baseUrl, null, "/api/login", {
-    method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "wrong-password" })
+    method: "POST", body: JSON.stringify({ username: "v2outside" + suffix, password: "wrong-password" })
   });
   assert.equal(locked.status, 429);
   const blockedCorrectPassword = await request(baseUrl, null, "/api/login", {
-    method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "test-password-123" })
+    method: "POST", body: JSON.stringify({ username: "v2outside" + suffix, password: "test-password-123" })
   });
   assert.equal(blockedCorrectPassword.status, 429);
 });
