@@ -137,6 +137,9 @@ function ensureColumn(table, column, definition) {
 ensureColumn("chats","avatar","TEXT DEFAULT ''");
 ensureColumn("chats","wallpaper","TEXT DEFAULT ''");
 ensureColumn("chats","slow_mode_seconds","INTEGER DEFAULT 0");
+ensureColumn("chats","username","TEXT");
+ensureColumn("messages","sender_as_channel","INTEGER DEFAULT 0");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_username ON chats(username COLLATE NOCASE) WHERE username IS NOT NULL AND username<>''");
 ensureColumn("messages","reply_to","INTEGER");
 ensureColumn("messages","edited_at","TEXT");
 ensureColumn("messages","reactions","TEXT DEFAULT '{}'");
@@ -480,8 +483,12 @@ app.post("/api/chats",auth,(req,res)=>{
   const title=String(req.body.title||"").trim().slice(0,60);
   const description=String(req.body.description||"").slice(0,250);
   const type=["group","channel"].includes(req.body.type)?req.body.type:"group";
+  const channelUsername=String(req.body.username||"").trim().replace(/^@/,"").toLowerCase();
   if(!title) return res.status(400).json({error:"Укажите название"});
-  const info=q("INSERT INTO chats(title,description,type,owner_id,avatar,wallpaper) VALUES(?,?,?,?,?,?)").run(title,description,type,req.user.id,String(req.body.avatar||"").slice(0,200),String(req.body.wallpaper||"").slice(0,200));
+  if(type==="channel"&&channelUsername&&!/^[a-z0-9_]{5,32}$/.test(channelUsername)) return res.status(400).json({error:"Юзернейм канала: 5–32 символа, латиница, цифры и _"});
+  if(type!=="channel"&&channelUsername) return res.status(400).json({error:"Юзернейм доступен только каналам"});
+  if(channelUsername&&q("SELECT 1 FROM chats WHERE username=? COLLATE NOCASE").get(channelUsername)) return res.status(409).json({error:"Этот юзернейм канала уже занят"});
+  const info=q("INSERT INTO chats(title,description,type,owner_id,avatar,wallpaper,username) VALUES(?,?,?,?,?,?,?)").run(title,description,type,req.user.id,String(req.body.avatar||"").slice(0,200),String(req.body.wallpaper||"").slice(0,200),channelUsername||null);
   q("INSERT INTO members(chat_id,user_id,role) VALUES(?,?,'owner')").run(info.lastInsertRowid,req.user.id);
   const usernames=Array.isArray(req.body.members)?req.body.members.slice(0,30):[];
   for(const raw of usernames){
@@ -490,6 +497,13 @@ app.post("/api/chats",auth,(req,res)=>{
   }
   const chat=q("SELECT * FROM chats WHERE id=?").get(info.lastInsertRowid);
   res.json({chat});
+});
+app.get("/api/channels/by-username/:username",auth,(req,res)=>{
+  const username=String(req.params.username||"").replace(/^@/,"").toLowerCase();
+  const channel=q("SELECT id,title,description,avatar,username,created_at FROM chats WHERE type='channel' AND username=? COLLATE NOCASE").get(username);
+  if(!channel) return res.status(404).json({error:"Канал не найден"});
+  const member=q("SELECT 1 FROM members WHERE chat_id=? AND user_id=?").get(channel.id,req.user.id);
+  res.json({channel,isMember:!!member,memberCount:q("SELECT COUNT(*) n FROM members WHERE chat_id=?").get(channel.id).n});
 });
 app.get("/api/chats/:id/messages",auth,(req,res)=>{
   const id=Number(req.params.id);
@@ -500,13 +514,18 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
   const select=`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
     m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
     (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
-    u.username,u.display_name,u.avatar,u.role,
+    CASE WHEN m.sender_as_channel=1 THEN NULL ELSE u.username END AS username,
+    CASE WHEN m.sender_as_channel=1 THEN c.title ELSE u.display_name END AS display_name,
+    CASE WHEN m.sender_as_channel=1 THEN c.avatar ELSE u.avatar END AS avatar,
+    CASE WHEN m.sender_as_channel=1 THEN NULL ELSE u.role END AS role,
+    CASE WHEN m.sender_as_channel=1 THEN 1 ELSE 0 END AS sender_is_channel,
+    CASE WHEN m.user_id=? THEN 1 ELSE 0 END AS is_mine,
     (SELECT COUNT(*) FROM chat_reads cr WHERE cr.chat_id=m.chat_id AND cr.user_id<>m.user_id AND cr.last_read_message_id>=m.id) AS read_by_count,
     EXISTS(SELECT 1 FROM chat_pins cp WHERE cp.chat_id=m.chat_id AND cp.message_id=m.id) AS is_pinned
-    FROM messages m JOIN users u ON u.id=m.user_id WHERE m.chat_id=? AND NOT EXISTS(SELECT 1 FROM hidden_messages hm WHERE hm.user_id=? AND hm.message_id=m.id)`;
+    FROM messages m JOIN users u ON u.id=m.user_id JOIN chats c ON c.id=m.chat_id WHERE m.chat_id=? AND NOT EXISTS(SELECT 1 FROM hidden_messages hm WHERE hm.user_id=? AND hm.message_id=m.id)`;
   const rows=before
-    ? q(select+" AND m.id<? ORDER BY m.id DESC LIMIT ?").all(id,req.user.id,before,limit+1)
-    : q(select+" ORDER BY m.id DESC LIMIT ?").all(id,req.user.id,limit+1);
+    ? q(select+" AND m.id<? ORDER BY m.id DESC LIMIT ?").all(req.user.id,id,req.user.id,before,limit+1)
+    : q(select+" ORDER BY m.id DESC LIMIT ?").all(req.user.id,id,req.user.id,limit+1);
   const hasMore=rows.length>limit;
   const messages=rows.slice(0,limit).reverse();
   res.json({messages,hasMore,nextCursor:messages[0]?.id||null});
@@ -773,14 +792,21 @@ app.post("/api/chats/:id/messages",auth,(req,res)=>{
       if(retryAfter>0) return res.status(429).json({error:"Медленный режим: подожди ещё "+retryAfter+" сек.",retryAfter});
     }
   }
+  const sendAsChannel=!!req.body.sendAsChannel;
+  if(sendAsChannel&&(chatType!=="channel"||!["owner","admin"].includes(membership.role))) return res.status(403).json({error:"Публиковать от лица канала могут только его владелец и администраторы"});
   const replyTo=Number(req.body.replyTo)||null;
   if(replyTo && !q("SELECT id FROM messages WHERE id=? AND chat_id=?").get(replyTo,id)) return res.status(400).json({error:"Сообщение для ответа не найдено"});
-  const info=q("INSERT INTO messages(chat_id,user_id,body,reply_to,attachments) VALUES(?,?,?,?,?)").run(id,req.user.id,body,replyTo,JSON.stringify(validAttachments));
+  const info=q("INSERT INTO messages(chat_id,user_id,body,reply_to,attachments,sender_as_channel) VALUES(?,?,?,?,?,?)").run(id,req.user.id,body,replyTo,JSON.stringify(validAttachments),sendAsChannel?1:0);
   const message=q(`SELECT m.id,m.chat_id,m.body,m.attachments,m.created_at,m.reply_to,m.edited_at,m.reactions,
     m.forwarded_from_message_id,m.forwarded_from_user_id,m.forwarded_from_name,m.forwarded_from_chat_id,m.forwarded_from_chat_title,
     (SELECT COUNT(*) FROM messages fw WHERE fw.forwarded_from_message_id=m.id) AS forward_count,
-    u.username,u.display_name,u.avatar,u.role
-    FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id=?`).get(info.lastInsertRowid);
+    CASE WHEN m.sender_as_channel=1 THEN NULL ELSE u.username END AS username,
+    CASE WHEN m.sender_as_channel=1 THEN c.title ELSE u.display_name END AS display_name,
+    CASE WHEN m.sender_as_channel=1 THEN c.avatar ELSE u.avatar END AS avatar,
+    CASE WHEN m.sender_as_channel=1 THEN NULL ELSE u.role END AS role,
+    CASE WHEN m.sender_as_channel=1 THEN 1 ELSE 0 END AS sender_is_channel,
+    CASE WHEN m.user_id=? THEN 1 ELSE 0 END AS is_mine
+    FROM messages m JOIN users u ON u.id=m.user_id JOIN chats c ON c.id=m.chat_id WHERE m.id=?`).get(req.user.id,info.lastInsertRowid);
   io.to("chat:"+id).emit("message",message);
   res.json({message});
 });
@@ -857,11 +883,17 @@ app.patch("/api/chats/:id",auth,(req,res)=>{
   const id=Number(req.params.id), member=q("SELECT role FROM members WHERE chat_id=? AND user_id=?").get(id,req.user.id);
   if(!member) return res.status(403).json({error:"Нет доступа"});
   if(!["owner","admin"].includes(member.role) && !["owner","dev"].includes(req.user.role)) return res.status(403).json({error:"Недостаточно прав"});
-  const current=q("SELECT slow_mode_seconds FROM chats WHERE id=?").get(id);
+  const current=q("SELECT slow_mode_seconds,username,type FROM chats WHERE id=?").get(id);
   const slowModeSeconds=req.body.slowModeSeconds===undefined?Number(current?.slow_mode_seconds)||0:Number(req.body.slowModeSeconds);
   if(![0,5,10,30,60].includes(slowModeSeconds)) return res.status(400).json({error:"Недопустимое значение медленного режима"});
-  q("UPDATE chats SET title=?,description=?,avatar=?,wallpaper=?,slow_mode_seconds=? WHERE id=?")
-    .run(String(req.body.title||"").trim().slice(0,60),String(req.body.description||"").slice(0,250),String(req.body.avatar||"").slice(0,200),String(req.body.wallpaper||"").slice(0,200),slowModeSeconds,id);
+  let channelUsername=current?.username||"";
+  if(current?.type==="channel"&&req.body.username!==undefined){
+    channelUsername=String(req.body.username||"").trim().replace(/^@/,"").toLowerCase();
+    if(channelUsername&&!/^[a-z0-9_]{5,32}$/.test(channelUsername)) return res.status(400).json({error:"Юзернейм канала: 5–32 символа, латиница, цифры и _"});
+    if(channelUsername&&q("SELECT 1 FROM chats WHERE username=? COLLATE NOCASE AND id<>?").get(channelUsername,id)) return res.status(409).json({error:"Этот юзернейм канала уже занят"});
+  }
+  q("UPDATE chats SET title=?,description=?,avatar=?,wallpaper=?,slow_mode_seconds=?,username=? WHERE id=?")
+    .run(String(req.body.title||"").trim().slice(0,60),String(req.body.description||"").slice(0,250),String(req.body.avatar||"").slice(0,200),String(req.body.wallpaper||"").slice(0,200),slowModeSeconds,channelUsername||null,id);
   res.json({chat:q("SELECT * FROM chats WHERE id=?").get(id)});
 });
 app.delete("/api/chats/:id",auth,(req,res)=>{
@@ -1013,7 +1045,7 @@ app.post("/api/upload",auth,(req,res)=>{
   if(!match) return res.status(400).json({error:"Некорректный файл"});
   const mime=match[1].toLowerCase();
   const allowed=kind==="audio"
-    ? /^audio\/(mpeg|ogg|wav|mp4|aac|flac|webm)$/
+    ? /^audio\/(mpeg|ogg|wav|mp4|x-m4a|x-wav|aac|flac|webm)$/
     : kind==="image"
       ? /^image\/(png|jpeg|webp|gif)$/
       : kind==="file"
@@ -1030,7 +1062,9 @@ app.post("/api/upload",auth,(req,res)=>{
     "image/gif":()=>buffer.subarray(0,3).toString()==="GIF",
     "image/webp":()=>buffer.subarray(0,4).toString()==="RIFF"&&buffer.subarray(8,12).toString()==="WEBP",
     "audio/ogg":()=>buffer.subarray(0,4).toString()==="OggS",
-    "audio/wav":()=>buffer.subarray(0,4).toString()==="RIFF",
+    "audio/wav":()=>buffer.subarray(0,4).toString()==="RIFF"&&buffer.subarray(8,12).toString()==="WAVE",
+    "audio/x-wav":()=>buffer.subarray(0,4).toString()==="RIFF"&&buffer.subarray(8,12).toString()==="WAVE",
+    "audio/x-m4a":()=>buffer.subarray(4,8).toString()==="ftyp",
     "audio/flac":()=>buffer.subarray(0,4).toString()==="fLaC",
     "audio/mp4":()=>buffer.subarray(4,8).toString()==="ftyp",
     "audio/mpeg":()=>buffer.subarray(0,3).toString()==="ID3"||(buffer[0]===0xff&&(buffer[1]&0xe0)===0xe0),
@@ -1045,7 +1079,7 @@ app.post("/api/upload",auth,(req,res)=>{
   };
   if(!signatures[mime]||!signatures[mime]()) return res.status(415).json({error:"Содержимое файла не соответствует его формату"});
   const ext={
-    "audio/mpeg":"mp3","audio/ogg":"ogg","audio/wav":"wav","audio/mp4":"m4a","audio/aac":"aac","audio/flac":"flac","audio/webm":"weba",
+    "audio/mpeg":"mp3","audio/ogg":"ogg","audio/wav":"wav","audio/x-wav":"wav","audio/mp4":"m4a","audio/x-m4a":"m4a","audio/aac":"aac","audio/flac":"flac","audio/webm":"weba",
     "image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif",
     "application/pdf":"pdf","text/plain":"txt","application/zip":"zip",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document":"docx",
