@@ -280,7 +280,53 @@ async function createChat(defaultType='group'){
  const m=modal('Создать пространство','Новая группа или публичный канал',`<form id="createForm"><label class="field"><span>Название</span><input name="title" maxlength="60" required placeholder="Например, Друзья"></label><label class="field"><span>Описание</span><textarea name="description" maxlength="250" placeholder="О чём это пространство?"></textarea></label><label class="field"><span>Тип пространства</span><select name="type"><option value="group" ${defaultType==='group'?'selected':''}>Групповой чат</option><option value="channel" ${defaultType==='channel'?'selected':''}>Канал</option></select></label><label class="field"><span>Участники через запятую (необязательно)</span><input name="members" placeholder="user1, user2"></label></form>`,'<button class="soft-btn" data-close>Отмена</button><button class="filled" id="createSubmit">Создать</button>');
  $('#createSubmit').onclick=async()=>{const d=Object.fromEntries(new FormData($('#createForm')));d.members=d.members.split(',').map(x=>x.trim().replace(/^@/,'')).filter(Boolean);try{const r=await api('/api/chats',{method:'POST',body:JSON.stringify(d)});closeModal();await loadChats();openChat(r.chat.id)}catch(e){toast(e.message)}};
 }
-async function findUser(name){try{const r=await api('/api/users/'+encodeURIComponent(name.replace(/^@/,'')));const u=r.user;const m=modal('Профиль пользователя',`@${esc(u.username)}`,`<div class="public-profile">${avatar(u.avatar,u.displayName,'public-avatar')}<h3>${esc(u.displayName)} ${badge(u)}</h3><p>@${esc(u.username)} · ${esc(u.number||'')}</p><p>${esc(u.bio||'Описание не добавлено')}</p></div>`,'<button class="soft-btn" data-close>Закрыть</button><button class="filled" id="startDM">Написать</button>');$('#startDM').onclick=async()=>{try{const x=await api('/api/dm',{method:'POST',body:JSON.stringify({username:u.username})});closeModal();await loadChats();openChat(x.chat.id)}catch(e){toast(e.message)}}}catch(e){toast(e.message)}}
+async function findUser(name){
+ try{
+  const [profile,blockList]=await Promise.all([
+   api('/api/users/'+encodeURIComponent(name.replace(/^@/,''))),
+   api('/api/blocks')
+  ]);
+  const u=profile.user;
+  let blocked=(blockList.users||[]).some(x=>Number(x.id)===Number(u.id));
+  const dialog=modal('Профиль пользователя','@'+esc(u.username),
+   '<div class="public-profile">'+avatar(u.avatar,u.displayName,'public-avatar')+
+   '<h3>'+esc(u.displayName)+' '+badge(u)+'</h3><p>@'+esc(u.username)+' · '+esc(u.number||'')+'</p><p>'+esc(u.bio||'Описание не добавлено')+'</p></div>'+
+   '<p class="muted" id="blockStatus">'+(blocked?'Пользователь заблокирован тобой':'')+'</p>',
+   '<button class="soft-btn" data-close>Закрыть</button>'+
+   '<button class="danger" id="toggleUserBlock">'+(blocked?'Разблокировать':'Заблокировать')+'</button>'+
+   '<button class="filled" id="startDM" '+(blocked?'disabled':'')+'>Написать</button>');
+  $('#startDM').onclick=async()=>{
+   try{
+    const x=await api('/api/dm',{method:'POST',body:JSON.stringify({username:u.username})});
+    closeModal();await loadChats();openChat(x.chat.id);
+   }catch(e){toast(e.message)}
+  };
+  $('#toggleUserBlock').onclick=async()=>{
+   try{
+    await api('/api/users/'+u.id+'/block',{method:blocked?'DELETE':'POST'});
+    blocked=!blocked;
+    $('#toggleUserBlock').textContent=blocked?'Разблокировать':'Заблокировать';
+    $('#startDM').disabled=blocked;
+    $('#blockStatus').textContent=blocked?'Пользователь заблокирован тобой':'';
+    toast(blocked?'Пользователь заблокирован':'Пользователь разблокирован');
+   }catch(e){toast(e.message)}
+  };
+ }catch(e){toast(e.message)}
+}
+async function openBlockedUsers(){
+ try{
+  const d=await api('/api/blocks');
+  const list=(d.users||[]).map(u=>'<div class="m3-hidden-item"><span><b>'+esc(u.display_name)+'</b><small>@'+esc(u.username)+'</small></span><button class="soft-btn" data-unblock="'+u.id+'">Разблокировать</button></div>').join('');
+  const dialog=modal('Заблокированные','Они не смогут начать с тобой личный диалог или писать в direct-чате',list?'<div class="m3-hidden-list">'+list+'</div>':'<p class="empty">Заблокированных пользователей нет</p>');
+  dialog.querySelectorAll('[data-unblock]').forEach(button=>button.onclick=async()=>{
+   try{
+    await api('/api/users/'+button.dataset.unblock+'/block',{method:'DELETE'});
+    button.closest('.m3-hidden-item')?.remove();
+    toast('Пользователь разблокирован');
+   }catch(e){toast(e.message)}
+  });
+ }catch(e){toast(e.message)}
+}
 async function jumpToMessage(chatId,messageId){
  const targetChat=state.chats.find(c=>c.id===Number(chatId));
  if(!targetChat){toast('Чат больше недоступен');return}
@@ -559,7 +605,7 @@ $('#messageInput').addEventListener('input',()=>{
  clearTimeout(typingStopTimer);
  typingStopTimer=setTimeout(()=>state.socket?.emit('typing',{chatId:typingChatId,typing:false}),1300);
 });$('#sendForm').onsubmit=async e=>{e.preventDefault();await sendCurrentMessage()};document.addEventListener('paste',e=>{if(!state.active)return;const items=[...(e.clipboardData?.items||[])];const images=items.filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(images.length){e.preventDefault();addMessageFiles(images)}});
-$('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='saved')openSavedMessages();else if(action==='hidden')openHiddenMessages();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b))});const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}});
+$('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='saved')openSavedMessages();else if(action==='hidden')openHiddenMessages();else if(action==='blocked')openBlockedUsers();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b))});const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}});
 
 function installMaterialIconFont(){
  const glyphs=[['☰','menu'],['⌕','search'],['＋','add'],['⚙','settings'],['♫','music_note'],['☾','dark_mode'],['◉','account_circle'],['♧','group_add'],['◈','campaign'],['☺','sentiment_satisfied'],['➤','send'],['▢','content_copy'],['↩','reply'],['✎','edit'],['×','close'],['▶','play_arrow'],['Ⅱ','pause'],['↶','skip_previous'],['↷','skip_next'],['☆','star'],['★','star'],['⌖','push_pin'],['➦','forward'],['🔔','notifications'],['🔕','notifications_off']];
