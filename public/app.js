@@ -31,6 +31,7 @@ function applyUI(){
  const r=document.documentElement;
  r.style.setProperty('--font-scale',state.ui.fontScale||1);
  r.style.setProperty('--m3-font-weight',state.ui.fontWeight||600);
+ r.style.setProperty('--m3-title-weight',Math.min(900,(state.ui.fontWeight||600)+140));
  r.style.setProperty('--font-family',fontFamilies[state.ui.fontFamily]||fontFamilies.google);
  r.style.setProperty('--bubble-radius',(state.ui.bubbleRadius||20)+'px');
  r.style.setProperty('--chat-gap',(state.ui.chatGap||10)+'px');
