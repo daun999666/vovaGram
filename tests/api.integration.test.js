@@ -91,6 +91,17 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.equal(created.status, 200, JSON.stringify(created.body));
   const chatId = created.body.chat.id;
 
+  const draftSaved = await request(baseUrl, ownerToken, `/api/chats/${chatId}/draft`, {
+    method: "PUT", body: JSON.stringify({ body: "draft that must survive switching chats" })
+  });
+  assert.equal(draftSaved.status, 200);
+  const draftRead = await request(baseUrl, ownerToken, `/api/chats/${chatId}/draft`);
+  assert.equal(draftRead.body.draft.body, "draft that must survive switching chats");
+  const draftCleared = await request(baseUrl, ownerToken, `/api/chats/${chatId}/draft`, { method: "DELETE" });
+  assert.equal(draftCleared.status, 200);
+  const emptyDraft = await request(baseUrl, ownerToken, `/api/chats/${chatId}/draft`);
+  assert.equal(emptyDraft.body.draft.body, "");
+
   const first = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`, {
     method: "POST", body: JSON.stringify({ body: "first message" })
   });
@@ -115,6 +126,21 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
 
   const unreadBefore = await request(baseUrl, ownerToken, "/api/chats");
   assert.equal(unreadBefore.body.chats.find(x => x.id === chatId).unread_count, 2);
+
+  const hidden = await request(baseUrl, ownerToken, `/api/messages/${third.body.message.id}/hide`, { method: "POST", body: "{}" });
+  assert.equal(hidden.status, 200);
+  const ownerVisibleHistory = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`);
+  assert.equal(ownerVisibleHistory.body.messages.some(x => x.id === third.body.message.id), false);
+  const memberVisibleHistory = await request(baseUrl, memberToken, `/api/chats/${chatId}/messages`);
+  assert.equal(memberVisibleHistory.body.messages.some(x => x.id === third.body.message.id), true);
+  const hiddenList = await request(baseUrl, ownerToken, "/api/hidden-messages");
+  assert.equal(hiddenList.body.messages.length, 1);
+  const unreadAfterHide = await request(baseUrl, ownerToken, "/api/chats");
+  assert.equal(unreadAfterHide.body.chats.find(x => x.id === chatId).unread_count, 1);
+  const restored = await request(baseUrl, ownerToken, `/api/messages/${third.body.message.id}/hide`, { method: "DELETE" });
+  assert.equal(restored.status, 200);
+  const ownerVisibleAgain = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`);
+  assert.equal(ownerVisibleAgain.body.messages.some(x => x.id === third.body.message.id), true);
 
   const edited = await request(baseUrl, ownerToken, `/api/messages/${first.body.message.id}`, {
     method: "PATCH", body: JSON.stringify({ body: "first message edited" })
