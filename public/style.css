@@ -149,3 +149,30 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .attachment-chip button{position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:50%;background:var(--surface3);color:var(--text)}
 .send-btn:disabled{opacity:.5;cursor:wait}
 @media(max-width:760px){.message-image-link{max-width:82vw}.message-image{max-height:330px}}
+
+/* v1.7.0 — Material 3 Expressive layout */
+:root{--font-family:'Roboto',system-ui,sans-serif;--m3-motion:cubic-bezier(.2,0,0,1)}
+html,body,button,input,textarea,select{font-family:'Roboto',system-ui,sans-serif}
+button,.chat-item,.message,.modal,.profile-side,.composer,.folder,.soft-btn,.filled,.icon-btn{transition:background-color .22s var(--m3-motion),color .22s var(--m3-motion),border-color .22s var(--m3-motion),box-shadow .22s var(--m3-motion),transform .22s var(--m3-motion),border-radius .22s var(--m3-motion)}
+.folder-tabs{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px!important;width:100%;min-width:0;overflow:hidden!important;scrollbar-width:none!important;margin:12px 0 3px;padding:0 1px}
+.folder-tabs::-webkit-scrollbar{display:none!important}
+.folder{min-width:0;width:100%;padding:8px 2px!important;font-size:clamp(10px,.78vw,12px)!important;text-align:center;overflow:hidden;text-overflow:ellipsis}
+.messages{align-items:stretch!important;padding:20px clamp(12px,2vw,28px)!important;gap:12px!important}
+.message,.message.mine{align-self:flex-start!important;display:flex;flex-direction:column;width:fit-content;max-width:min(78%,680px);min-width:0;border-radius:22px 22px 22px 7px!important;padding:10px 13px!important;overflow-wrap:anywhere}
+.message.mine{background:var(--bubble)!important;color:var(--text)!important}
+.message .sender{display:flex!important;align-items:center;gap:7px;margin:0 0 7px!important;color:var(--primary)!important}
+.sender-avatar{width:25px!important;height:25px!important;flex:none!important;border-radius:50%!important}
+.message p{max-width:100%;overflow-wrap:anywhere;word-break:normal}
+.message-foot{width:100%;min-width:0}
+.chat-banner,.chat-banner>div:nth-child(2),.sidebar,.chat-list,.modal,.modal-content,.settings-section{min-width:0}
+#chatList,.chat-list{overflow-x:hidden}
+.sidebar{overflow:hidden}
+.palette{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+.field input,.field textarea,.field select{max-width:100%;min-width:0}
+.wallpaper{background-size:cover;transition:opacity .35s ease,background-image .35s ease;animation:wallpaper-drift 28s ease-in-out infinite alternate}
+.wallpaper.shapes{background-image:radial-gradient(ellipse at 18% 22%,#8b5cf633 0 17%,transparent 17.2%),radial-gradient(ellipse at 82% 70%,#b69cff22 0 22%,transparent 22.2%),radial-gradient(ellipse at 55% 45%,#5d4b8520 0 15%,transparent 15.2%)}
+.wallpaper.m3forms{background-image:radial-gradient(ellipse 18% 10% at 20% 25%,#a78bfa30 0 99%,transparent 100%),radial-gradient(ellipse 12% 22% at 76% 55%,#c4b5fd26 0 99%,transparent 100%),radial-gradient(ellipse 28% 13% at 60% 90%,#7c3aed22 0 99%,transparent 100%)}
+.wallpaper.waves{background-image:repeating-radial-gradient(ellipse at 0% 100%,transparent 0 44px,#a78bfa1c 46px 48px,transparent 50px 88px)}
+@keyframes wallpaper-drift{0%{background-position:0% 0%,100% 100%,50% 50%}100%{background-position:4% 3%,96% 94%,54% 47%}}
+@media(max-width:720px){.folder{font-size:10px!important;padding-inline:1px!important}.messages{padding:14px 10px!important}.message,.message.mine{max-width:88%}.chat-banner{padding-inline:12px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
