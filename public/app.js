@@ -205,8 +205,16 @@ async function findUser(name){try{const r=await api('/api/users/'+encodeURICompo
 let searchTimer;$('#searchInput').oninput=()=>{clearTimeout(searchTimer);const q=$('#searchInput').value.trim();if(q.length<2){$('#searchResults').classList.add('hidden');return}searchTimer=setTimeout(async()=>{try{const d=await api('/api/search?q='+encodeURIComponent(q));const box=$('#searchResults');box.innerHTML=[...d.users.map(u=>`<button data-user="${esc(u.username)}">${avatar(u.avatar,u.display_name,'result-avatar')}<span><b>${esc(u.display_name)}</b><small>@${esc(u.username)}</small></span></button>`),...d.chats.map(c=>`<button data-chat="${c.id}">${avatar(c.avatar,c.title,'result-avatar')}<span><b>${esc(c.title)}</b><small>${c.type==='channel'?'Канал':'Чат'}</small></span></button>`)].join('')||'<p class="empty">Ничего не найдено</p>';box.classList.remove('hidden');box.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');findUser(b.dataset.user)});box.querySelectorAll('[data-chat]').forEach(b=>b.onclick=()=>{box.classList.add('hidden');openChat(+b.dataset.chat)})}catch(e){toast(e.message)}},250)};
 function setTransferProgress(progress,label){
  const box=$('#transferProgress');if(!box)return;
- if(progress===null){box.classList.add('is-indeterminate');$('#transferValue').textContent='';$('#transferWave').setAttribute('aria-valuenow','0');}
- else{const p=Math.max(0,Math.min(100,Number(progress)||0));box.classList.remove('is-indeterminate');box.style.setProperty('--transfer-progress',p+'%');$('#transferValue').textContent=Math.round(p)+'%';$('#transferWave').setAttribute('aria-valuenow',String(Math.round(p)));}
+ const indicator=$('#transferWave');
+ if(progress===null){
+  indicator.indeterminate=true;indicator.setAttribute('indeterminate','');
+  $('#transferValue').textContent='';
+ }else{
+  const p=Math.max(0,Math.min(100,Number(progress)||0));
+  indicator.indeterminate=false;indicator.removeAttribute('indeterminate');
+  indicator.value=p;indicator.setAttribute('aria-valuenow',String(Math.round(p)));
+  $('#transferValue').textContent=Math.round(p)+'%';
+ }
  if(label)$('#transferLabel').textContent=label;
  box.classList.remove('hidden');
 }
@@ -309,20 +317,19 @@ function formatTime(value){if(!Number.isFinite(value)||value<0)return '00:00';co
 function updatePlayerLabels(){
  const a=$('#audioPlayer'),song=state.currentSong,playing=!a.paused&&!!a.src;
  $('#mediaTrackTitle').textContent=song?.title||'Выбери композицию';
- $('#mediaTrackSubtitle').textContent=song?'Личная медиатека':'Персональный плеер vovchikGram';
+ $('#mediaTrackSubtitle').textContent=song?'Личная коллекция':'Персональный плеер vovchikGram';
  $('#trackName').textContent=song?.title||'Нет трека';
  $('#mediaCurrent').textContent=formatTime(a.currentTime);
  $('#mediaDuration').textContent=formatTime(a.duration);
  $('#mediaPlayPause').innerHTML='<span class="material-symbols-rounded">'+(playing?'pause':'play_arrow')+'</span>';
  $('#mediaPlayPause').setAttribute('aria-label',playing?'Пауза':'Воспроизвести');
  $('#mediaPlayPause').title=playing?'Пауза':'Воспроизвести';
- $('#mediaWaveform')?.classList.toggle('is-playing',playing);
  $('#mediaPanel').classList.toggle('is-playing',playing);
  $('#playerDock').classList.toggle('is-playing',playing);
  const progress=a.duration?Math.min(100,Math.max(0,a.currentTime/a.duration*100)):0;
  $('#mediaSeek').value=Math.round(progress*10);
- $('#mediaSeek').style.setProperty('--seek-progress',progress+'%');
- $('#mediaWaveform')?.style.setProperty('--seek-progress',progress+'%');
+ const nativeProgress=$('#mediaWaveform');
+ if(nativeProgress){nativeProgress.value=progress;nativeProgress.setAttribute('aria-valuenow',String(Math.round(progress)))}
 }
 function openMedia(){if(!state.user)return showAuth();const panel=$('#mediaPanel');clearTimeout(closeMedia.timer);panel.classList.remove('hidden');panel.classList.remove('media-panel-open');void panel.offsetWidth;panel.classList.add('media-panel-open');loadSongs()}
 function closeMedia(){const panel=$('#mediaPanel');panel.classList.remove('media-panel-open');clearTimeout(closeMedia.timer);closeMedia.timer=setTimeout(()=>panel.classList.add('hidden'),220)}
