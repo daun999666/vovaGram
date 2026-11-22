@@ -407,6 +407,52 @@ function uploadFile(file,kind){
 let pendingMessageFiles=[];
 function renderAttachmentPreview(){const box=$('#attachmentPreview');if(!box)return;box.innerHTML=pendingMessageFiles.map((f,i)=>`<div class="attachment-chip"><img src="${URL.createObjectURL(f)}" alt=""><span>${esc(f.name)}</span><button type="button" data-remove-attachment="${i}" aria-label="Убрать">×</button></div>`).join('');box.classList.toggle('hidden',!pendingMessageFiles.length);box.querySelectorAll('[data-remove-attachment]').forEach(b=>b.onclick=()=>{pendingMessageFiles.splice(+b.dataset.removeAttachment,1);renderAttachmentPreview()})}
 function addMessageFiles(files){for(const f of files){if(!f.type.startsWith('image/')){toast('Пока можно прикреплять изображения');continue}if(f.size>5*1024*1024){toast('Изображение должно быть до 5 МБ');continue}if(pendingMessageFiles.length>=4){toast('Максимум 4 изображения в одном сообщении');break}pendingMessageFiles.push(f)}renderAttachmentPreview()}
+async function openScheduledMessages(){
+ if(!state.active)return;
+ const chatId=state.active.id;
+ try{
+  const d=await api('/api/chats/'+chatId+'/scheduled');
+  const rows=(d.messages||[]).map(item=>{
+   const time=new Date(Number(item.scheduled_at)*1000).toLocaleString('ru-RU');
+   const failed=item.status==='failed';
+   return '<article class="m3-scheduled-row"><span><b>'+esc(item.body||'Вложение')+'</b><small>'+time+' · '+(failed?'Ошибка: '+esc(item.error||'не отправлено'):'Ожидает отправки')+'</small></span>'+
+    (failed?'':'<button class="soft-btn" data-cancel-scheduled="'+item.id+'">Отменить</button>')+'</article>';
+  }).join('');
+  const dialog=modal('Отложенные сообщения','Запланированные сообщения этого чата',rows?'<div class="m3-scheduled-list">'+rows+'</div>':'<p class="empty">Отложенных сообщений нет</p>','<button class="soft-btn" data-close>Закрыть</button>');
+  dialog.querySelectorAll('[data-cancel-scheduled]').forEach(button=>button.onclick=async()=>{
+   try{
+    await api('/api/scheduled/'+button.dataset.cancelScheduled,{method:'DELETE'});
+    button.closest('.m3-scheduled-row')?.remove();toast('Отправка отменена');
+   }catch(e){toast(e.message)}
+  });
+ }catch(e){toast(e.message)}
+}
+function openScheduleDialog(){
+ if(!state.active)return;
+ const suggested=new Date(Date.now()+5*60*1000).toISOString().slice(0,16);
+ const html='<label class="field"><span>Дата и время отправки</span><input type="datetime-local" id="scheduledAt" min="'+new Date(Date.now()+1000).toISOString().slice(0,16)+'" value="'+suggested+'" required></label>'+
+  '<p class="muted">Сообщение отправится автоматически, даже если браузер будет закрыт. Срок планирования — до 30 дней.</p>';
+ const dialog=modal('Отложенная отправка','Выбери, когда отправить сообщение',html,'<button class="soft-btn" data-close>Отмена</button><button class="filled" id="confirmSchedule">Запланировать</button>');
+ $('#confirmSchedule').onclick=async()=>{
+  const chatId=state.active?.id,body=$('#messageInput').value.trim(),input=$('#scheduledAt').value;
+  if(!chatId||(!body&&!pendingMessageFiles.length)){toast('Сначала напиши сообщение или прикрепи фото');return}
+  const date=new Date(input);
+  if(!input||!Number.isFinite(date.getTime())){toast('Укажи корректное время');return}
+  try{
+   const attachments=[];
+   for(const file of pendingMessageFiles){
+    setTransferProgress(0,'Загрузка '+file.name);
+    const uploaded=await uploadFile(file,'image');
+    attachments.push({url:uploaded.url,mime:file.type,name:file.name});
+   }
+   await api('/api/chats/'+chatId+'/scheduled',{method:'POST',body:JSON.stringify({body,attachments,scheduledAt:date.toISOString()})});
+   $('#messageInput').value='';clearTimeout(state.draftTimer);
+   await api('/api/chats/'+chatId+'/draft',{method:'DELETE'}).catch(()=>{});
+   pendingMessageFiles=[];renderAttachmentPreview();hideTransferProgress();
+   closeModal();toast('Сообщение запланировано');
+  }catch(e){hideTransferProgress();toast(e.message)}
+ };
+}
 async function sendCurrentMessage(){
  if(!state.active)return;
  const input=$('#messageInput'),body=input.value.trim(),chatId=state.active.id;
@@ -462,7 +508,8 @@ async function chatDetails(c){
  const actions='<button class="soft-btn" data-close>Закрыть</button>'+(canEdit?'<button class="filled" id="saveChat">Сохранить</button>':'')+(canDelete?'<button class="danger" id="deleteChannel">'+(c.type==='direct'?'Убрать диалог':canManageDelete?'Удалить пространство':c.type==='channel'?'Покинуть канал':'Покинуть группу')+'</button>':'');
  const preferenceHtml='<div class="chat-preference-actions"><h3>Быстрые настройки</h3>'+
   '<button class="soft-btn" id="toggleChatFavorite"><span class="material-symbols-rounded">'+(Number(c.is_starred)?'star':'star_outline')+'</span>'+(Number(c.is_starred)?'Убрать из избранного':'Добавить в избранное')+'</button>'+
-  '<button class="soft-btn" id="toggleChatArchive"><span class="material-symbols-rounded">'+(Number(c.is_archived)?'unarchive':'archive')+'</span>'+(Number(c.is_archived)?'Вернуть из архива':'Переместить в архив')+'</button></div>';
+  '<button class="soft-btn" id="toggleChatArchive"><span class="material-symbols-rounded">'+(Number(c.is_archived)?'unarchive':'archive')+'</span>'+(Number(c.is_archived)?'Вернуть из архива':'Переместить в архив')+'</button>'+
+  '<button class="soft-btn" id="openScheduledMessages"><span class="material-symbols-rounded">schedule</span>Отложенные сообщения</button></div>';
  const dialog=modal('Информация о чате','Параметры пространства',formHtml+memberPanel+preferenceHtml,actions);
  const updatePreference=async(field,value)=>{
   try{
@@ -475,6 +522,7 @@ async function chatDetails(c){
  };
  $('#toggleChatFavorite').onclick=()=>updatePreference('starred',!Number(c.is_starred));
  $('#toggleChatArchive').onclick=()=>updatePreference('archived',!Number(c.is_archived));
+ $('#openScheduledMessages').onclick=openScheduledMessages;
  dialog.querySelectorAll('[data-member-role]').forEach(button=>button.onclick=async()=>{
   try{
    await api('/api/chats/'+c.id+'/members/'+button.dataset.memberRole,{method:'PATCH',body:JSON.stringify({role:button.dataset.nextRole})});
@@ -659,6 +707,7 @@ function closeSpaceMenu(){const menu=$('#newChatMenuItems');if(menu)menu.classLi
 $('#newChatMenuItems').querySelectorAll('[data-create-space]').forEach(b=>b.onclick=()=>{const kind=b.dataset.createSpace;closeSpaceMenu();createChat(kind)});
 document.addEventListener('click',e=>{if(!e.target.closest('.m3-split-button'))closeSpaceMenu()});
 $('#loadMoreMessages').onclick=loadOlderMessages;
+$('#scheduleMessage').onclick=openScheduleDialog;
 $('#welcomeCreate').onclick=createChat;$('#settingsBtn').onclick=settings;$('#drawerProfile').onclick=()=>state.user?profileSide():showAuth();$('#profileBtn').onclick=()=>state.user?profileSide():showAuth();$('#accountBtn').onclick=()=>state.user?settings():showAuth();$('#menuPlayer').onclick=openMedia;$('#playerBtn').onclick=()=>$('#playerDock').classList.toggle('hidden');$('#closePlayer').onclick=()=>$('#playerDock').classList.add('hidden');$('#emojiBtn').onclick=openEmoji;$('#attachBtn').onclick=()=>$('#messageFilePicker').click();
 $('#chatFab').onclick=e=>{e.stopPropagation();const menu=$('#chatFabMenu'),open=menu.classList.contains('hidden');menu.classList.toggle('hidden',!open);$('#chatFab').setAttribute('aria-expanded',String(open));};
 $('#chatFabMenu').querySelectorAll('[data-fab-action]').forEach(b=>b.onclick=()=>{const action=b.dataset.fabAction;$('#chatFabMenu').classList.add('hidden');$('#chatFab').setAttribute('aria-expanded','false');if(action==='attach')$('#messageFilePicker').click();else if(action==='emoji')openEmoji();else if(action==='music')openMedia()});
