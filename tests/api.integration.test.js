@@ -463,6 +463,10 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
     method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "test-password-123" })
   });
   assert.equal(limited.status, 200);
+  const sixthRegistration = await request(baseUrl, null, "/api/register", {
+    method: "POST", body: JSON.stringify({ username: "v2sixth" + suffix, password: "test-password-123" })
+  });
+  assert.equal(sixthRegistration.status, 429);
   for (let attempt=0; attempt<4; attempt++) {
     const failed = await request(baseUrl, null, "/api/login", {
       method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "wrong-password" })
