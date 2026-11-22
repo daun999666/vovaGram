@@ -47,6 +47,16 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+ bucket_key TEXT PRIMARY KEY, failures INTEGER NOT NULL DEFAULT 0,
+ window_started INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS account_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+ event TEXT NOT NULL, details TEXT NOT NULL DEFAULT '{}',
+ created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_account_events_user ON account_events(user_id,id DESC);
 CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT UNIQUE NOT NULL,
  username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
@@ -133,6 +143,39 @@ ensureColumn("chat_preferences","pinned","INTEGER DEFAULT 0");
 
 const q = (sql) => db.prepare(sql);
 const getUser = q("SELECT id,number,username,display_name,bio,avatar,profile_bg,theme,role,banned,created_at FROM users WHERE id=?");
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_LOCK_MS = 15 * 60 * 1000;
+const AUTH_MAX_FAILURES = 5;
+function recordAccountEvent(userId,event,details={}) {
+  if (!userId) return;
+  q("INSERT INTO account_events(user_id,event,details) VALUES(?,?,?)")
+    .run(userId,String(event).slice(0,64),JSON.stringify(details).slice(0,1000));
+}
+function throttleKey(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+function throttleState(key,now=Date.now()) {
+  return q("SELECT failures,window_started,blocked_until FROM auth_rate_limits WHERE bucket_key=?").get(key);
+}
+function isThrottled(key,now=Date.now()) {
+  const row=throttleState(key,now);
+  return !!row && Number(row.blocked_until)>now;
+}
+function registerThrottleFailure(key,{windowMs=AUTH_WINDOW_MS,lockMs=AUTH_LOCK_MS,maxFailures=AUTH_MAX_FAILURES}={},now=Date.now()) {
+  const row=throttleState(key,now);
+  const active=row && now-Number(row.window_started)<windowMs;
+  const failures=(active?Number(row.failures):0)+1;
+  const windowStarted=active?Number(row.window_started):now;
+  const blockedUntil=failures>=maxFailures?now+lockMs:0;
+  q("INSERT INTO auth_rate_limits(bucket_key,failures,window_started,blocked_until) VALUES(?,?,?,?) ON CONFLICT(bucket_key) DO UPDATE SET failures=excluded.failures,window_started=excluded.window_started,blocked_until=excluded.blocked_until")
+    .run(key,failures,windowStarted,blockedUntil);
+  return blockedUntil;
+}
+function clearThrottle(key) { q("DELETE FROM auth_rate_limits WHERE bucket_key=?").run(key); }
+function requestLoginBuckets(username,req) {
+  const ip=String(req.ip||req.socket?.remoteAddress||"unknown").slice(0,120);
+  return [throttleKey("login-ip:"+ip),throttleKey("login-user:"+username+"|"+ip)];
+}
 const tokenFor = (u, req) => {
   const id = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 30*24*60*60*1000).toISOString();
@@ -204,26 +247,60 @@ app.use(express.static(path.join(__dirname,"public")));
 app.get("/api/health", (req,res)=>res.json({ok:true, app:"vovchikGram", version:"2.0.0-dev.4"}));
 
 app.post("/api/register", (req,res)=>{
+  const registerKey=throttleKey("register-ip:"+String(req.ip||req.socket?.remoteAddress||"unknown").slice(0,120));
+  if(isThrottled(registerKey)) return res.status(429).json({error:"Слишком много попыток регистрации. Попробуйте позже."});
   const username = cleanUsername(req.body.username);
   const password = String(req.body.password || "");
   const displayName = String(req.body.displayName || username).trim().slice(0,40);
   if (!/^[a-z0-9_]{3,24}$/.test(username)) return res.status(400).json({error:"Юзернейм: 3–24 символа, латиница, цифры и _"});
   if (password.length < 8) return res.status(400).json({error:"Пароль должен быть не короче 8 символов"});
   if (q("SELECT id FROM users WHERE username=? UNION SELECT user_id AS id FROM user_names WHERE username=?").get(username,username)) return res.status(409).json({error:"Юзернейм уже занят"});
+  const registrationBlocked=registerThrottleFailure(registerKey,{windowMs:60*60*1000,lockMs:60*60*1000,maxFailures:5});
+  if(registrationBlocked) return res.status(429).json({error:"Лимит регистраций с этого подключения исчерпан. Попробуйте позже."});
   try {
     const number = uniqueNumber();
     const info = q("INSERT INTO users(number,username,password_hash,display_name) VALUES(?,?,?,?)")
       .run(number,username,bcrypt.hashSync(password,10),displayName || username);
     const u = getUser.get(info.lastInsertRowid);
+    clearThrottle(registerKey);
+    recordAccountEvent(u.id,"account_registered");
     return res.json({token:tokenFor(u,req), user:publicUser(u)});
   } catch { return res.status(500).json({error:"Не удалось создать аккаунт"}); }
 });
 app.post("/api/login",(req,res)=>{
   const username = cleanUsername(req.body.username), password = String(req.body.password || "");
+  const buckets=requestLoginBuckets(username,req);
+  if(buckets.some(key=>isThrottled(key))) return res.status(429).json({error:"Слишком много неудачных попыток входа. Попробуйте через 15 минут."});
   const u = q("SELECT * FROM users WHERE username=? OR id IN (SELECT user_id FROM user_names WHERE username=?) LIMIT 1").get(username,username);
-  if (!u || !bcrypt.compareSync(password,u.password_hash)) return res.status(401).json({error:"Неверный юзернейм или пароль"});
+  if (!u || !bcrypt.compareSync(password,u.password_hash)) {
+    const locks=buckets.map(key=>registerThrottleFailure(key));
+    if(u) recordAccountEvent(u.id,"login_failed");
+    if(locks.some(Boolean)) return res.status(429).json({error:"Слишком много неудачных попыток входа. Попробуйте через 15 минут."});
+    return res.status(401).json({error:"Неверный юзернейм или пароль"});
+  }
   if (u.banned) return res.status(403).json({error:"Аккаунт заблокирован"});
+  buckets.forEach(clearThrottle);
+  recordAccountEvent(u.id,"login_succeeded");
   res.json({token:tokenFor(u,req),user:publicUser(u)});
+});
+app.get("/api/account/activity",auth,(req,res)=>{
+  const events=q("SELECT id,event,details,created_at FROM account_events WHERE user_id=? ORDER BY id DESC LIMIT 50").all(req.user.id);
+  res.json({events:events.map(event=>({...event,details:JSON.parse(event.details||"{}")}))});
+});
+app.post("/api/account/password",auth,(req,res)=>{
+  const currentPassword=String(req.body.currentPassword||"");
+  const newPassword=String(req.body.newPassword||"");
+  if(newPassword.length<8||newPassword.length>128) return res.status(400).json({error:"Новый пароль должен содержать от 8 до 128 символов"});
+  if(!bcrypt.compareSync(currentPassword,req.user.password_hash)) return res.status(403).json({error:"Текущий пароль указан неверно"});
+  if(bcrypt.compareSync(newPassword,req.user.password_hash)) return res.status(400).json({error:"Новый пароль должен отличаться от текущего"});
+  const hash=bcrypt.hashSync(newPassword,10);
+  db.transaction(()=>{
+    q("UPDATE users SET password_hash=? WHERE id=?").run(hash,req.user.id);
+    q("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND id<>? AND revoked_at=''").run(req.user.id,req.sessionId);
+    recordAccountEvent(req.user.id,"password_changed");
+  })();
+  for(const socket of io.sockets.sockets.values())if(socket.user?.id===req.user.id&&socket.sessionId!==req.sessionId)socket.disconnect(true);
+  res.json({ok:true,revokedOtherSessions:q("SELECT COUNT(*) AS count FROM auth_sessions WHERE user_id=? AND revoked_at<>''").get(req.user.id).count});
 });
 app.get("/api/sessions",auth,(req,res)=>{
   const sessions=q("SELECT id,user_agent,ip_hint,created_at,expires_at,revoked_at FROM auth_sessions WHERE user_id=? AND revoked_at='' AND expires_at>? ORDER BY created_at DESC").all(req.user.id,new Date().toISOString());
@@ -233,16 +310,19 @@ app.delete("/api/sessions/:id",auth,(req,res)=>{
   const id=String(req.params.id||"");
   const result=q("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND revoked_at=''").run(id,req.user.id);
   if(!result.changes)return res.status(404).json({error:"Сессия не найдена или уже завершена"});
+  recordAccountEvent(req.user.id,"session_revoked");
   for(const socket of io.sockets.sockets.values())if(socket.sessionId===id)socket.disconnect(true);
   res.json({ok:true});
 });
 app.post("/api/sessions/revoke-others",auth,(req,res)=>{
   const update=q("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at='' AND id<>?").run(req.user.id,req.sessionId);
+  if(update.changes)recordAccountEvent(req.user.id,"other_sessions_revoked",{count:update.changes});
   for(const socket of io.sockets.sockets.values())if(socket.user?.id===req.user.id&&socket.sessionId!==req.sessionId)socket.disconnect(true);
   res.json({ok:true,revoked:update.changes});
 });
 app.post("/api/logout",auth,(req,res)=>{
   q("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND revoked_at=''").run(req.sessionId,req.user.id);
+  recordAccountEvent(req.user.id,"logout");
   for(const socket of io.sockets.sockets.values())if(socket.sessionId===req.sessionId)socket.disconnect(true);
   res.json({ok:true});
 });
