@@ -409,6 +409,20 @@ async function jumpToMessage(chatId,messageId){
   setTimeout(()=>target.classList.remove('m3-search-hit'),1400);
  }else toast('Сообщение не найдено в истории');
 }
+function getRecentSearches(){try{const value=JSON.parse(localStorage.getItem('vg_recent_searches')||'[]');return Array.isArray(value)?value.filter(x=>typeof x==='string').slice(0,8):[]}catch{return []}}
+function rememberSearch(term){
+ const next=[term,...getRecentSearches().filter(item=>item.toLowerCase()!==term.toLowerCase())].slice(0,8);
+ localStorage.setItem('vg_recent_searches',JSON.stringify(next));
+}
+function showRecentSearches(){
+ const box=$('#searchResults'),items=getRecentSearches();
+ if(!items.length){box.classList.add('hidden');return}
+ box.innerHTML='<div class="recent-search-head"><b>Недавние запросы</b><button type="button" id="clearRecentSearches">Очистить</button></div>'+items.map(term=>'<button class="recent-search-item" data-recent-search="'+esc(term)+'"><span class="material-symbols-rounded">history</span>'+esc(term)+'</button>').join('');
+ box.classList.remove('hidden');
+ box.querySelectorAll('[data-recent-search]').forEach(button=>button.onclick=()=>{$('#searchInput').value=button.dataset.recentSearch;$('#searchInput').dispatchEvent(new Event('input'))});
+ $('#clearRecentSearches').onclick=()=>{localStorage.removeItem('vg_recent_searches');box.classList.add('hidden')};
+}
+$('#searchInput').addEventListener('focus',()=>{if(!$('#searchInput').value.trim())showRecentSearches()});
 let searchTimer;$('#searchInput').oninput=()=>{
  clearTimeout(searchTimer);
  const term=$('#searchInput').value.trim();
@@ -421,6 +435,7 @@ let searchTimer;$('#searchInput').oninput=()=>{
     api('/api/channels?q='+encodeURIComponent(term))
    ]);
    const peopleAndChats=results[0],messageResults=results[1],channelResults=results[2],box=$('#searchResults');
+   rememberSearch(term);
    const users=peopleAndChats.users.map(u=>'<button data-user="'+esc(u.username)+'">'+avatar(u.avatar,u.display_name,'result-avatar')+'<span><b>'+esc(u.display_name)+'</b><small>@'+esc(u.username)+'</small></span></button>');
    const chats=peopleAndChats.chats.map(c=>'<button data-chat="'+c.id+'">'+avatar(c.avatar,c.title,'result-avatar')+'<span><b>'+esc(c.title)+'</b><small>'+(c.type==='channel'?'Канал':'Чат')+'</small></span></button>');
    const messages=(messageResults.messages||[]).map(m=>'<button data-message-chat="'+m.chat_id+'" data-message-id="'+m.id+'"><span class="result-avatar message-search-icon"><span class="material-symbols-rounded">chat</span></span><span><b>'+esc(m.chat_title)+' · '+esc(m.display_name||m.username)+'</b><small>'+esc(String(m.body||'').slice(0,110))+'</small></span></button>');
@@ -909,8 +924,19 @@ document.addEventListener('visibilitychange',async()=>{
   await markChatRead(chatId);
  }catch(e){/* reconnect and refresh again on the next focus */}
 });
+function setConnectionStatus(status,label){
+ const element=$('#connectionStatus');if(!element)return;
+ element.classList.remove('is-online','is-offline','is-connecting','is-unknown');
+ element.classList.add('is-'+status);
+ element.querySelector('span').textContent=label;
+}
 function initSocket(){
- state.socket?.disconnect();state.socket=io({auth:{token:state.token}});
+ state.socket?.disconnect();state.socket=io({auth:{token:state.token},reconnection:true,reconnectionAttempts:Infinity,reconnectionDelay:500,reconnectionDelayMax:10000,randomizationFactor:0.5,timeout:20000});
+ state.socket.on('connect',()=>setConnectionStatus('online','На связи'));
+ state.socket.on('disconnect',reason=>setConnectionStatus('offline','Нет соединения'));
+ state.socket.on('connect_error',()=>setConnectionStatus('connecting','Переподключение…'));
+ state.socket.io.on('reconnect_attempt',attempt=>setConnectionStatus('connecting','Подключение · попытка '+attempt));
+ state.socket.io.on('reconnect',()=>setConnectionStatus('online','На связи'));
  state.socket.on('presence-snapshot',d=>{state.onlineUsers=new Set((d.userIds||[]).map(Number));renderChats()});
  state.socket.on('presence-update',d=>{if(d.online)state.onlineUsers.add(Number(d.userId));else state.onlineUsers.delete(Number(d.userId));renderChats()});
  state.socket.on('message',m=>{
@@ -938,7 +964,7 @@ function initSocket(){
  });
  state.socket.on('chat-deleted',d=>{state.chats=state.chats.filter(c=>c.id!==d.id);if(state.active?.id===d.id){state.active=null;$('#conversation').classList.add('hidden');$('#welcome').classList.remove('hidden');$('#topTitle').innerHTML='';$('#messages').innerHTML=''}renderChats();toast('Канал удалён владельцем')});
  state.socket.on('reaction-updated',d=>{if(state.active)api(`/api/chats/${state.active.id}/messages?limit=50`).then(x=>{$('#messages').innerHTML='';x.messages.forEach(m=>addMessage(m));state.messageHasMore=!!x.hasMore;updateLoadMoreButton()}).catch(()=>{})});
- state.socket.on('connect_error',()=>toast('Соединение с сервером потеряно'));
+ state.socket.on('connect_error',()=>setConnectionStatus('connecting','Переподключение…'));
 }
 const materialProgressReady=(async()=>{
  try{
@@ -1011,7 +1037,27 @@ $('#messageInput').addEventListener('keydown',e=>{
  if(action==='send'){e.preventDefault();$('#sendForm').requestSubmit()}
 });
 $('#sendForm').onsubmit=async e=>{e.preventDefault();await sendCurrentMessage()};document.addEventListener('paste',e=>{if(!state.active)return;const items=[...(e.clipboardData?.items||[])];const images=items.filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(images.length){e.preventDefault();addMessageFiles(images)}});
-$('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='saved')openSavedMessages();else if(action==='hidden')openHiddenMessages();else if(action==='blocked')openBlockedUsers();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b))});const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}});
+$('#openNav').onclick=()=>$('#sidebar').classList.add('open');$('#closeNav').onclick=()=>$('#sidebar').classList.remove('open');$('#menuDrawer').onclick=()=>$('#navDrawer').classList.toggle('hidden');$('#navDrawer').querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const action=b.dataset.nav;$('#navDrawer').classList.add('hidden');if(action==='profile')profileSide();else if(action==='group')createChat('group');else if(action==='channel')createChat('channel');else if(action==='music')openMedia();else if(action==='saved')openSavedMessages();else if(action==='hidden')openHiddenMessages();else if(action==='blocked')openBlockedUsers();else if(action==='settings')settings();else if(action==='dark'){state.ui.dark=!state.ui.dark;applyUI();localStorage.setItem('vg_ui',JSON.stringify(state.ui));drawProfile()}else if(action==='admin')adminPanel()});document.addEventListener('click',e=>{if(!e.target.closest('#navDrawer')&&!e.target.closest('#menuDrawer'))$('#navDrawer').classList.add('hidden')});$('#chatList').addEventListener('click',()=>$('#sidebar').classList.remove('open'));$('#folderTabs').querySelectorAll('[data-folder]').forEach(b=>b.onclick=()=>{state.folder=b.dataset.folder;$('#folderTabs').querySelectorAll('button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b))});const list=$('#chatList');list.classList.remove('list-switch');void list.offsetWidth;list.classList.add('list-switch');renderChats()});$('#headerSearch').onclick=()=>$('#searchInput').focus();
+function openCommandPalette(){
+ const commands=[['search','Поиск по чатам и людям','search'],['create','Создать группу','group_add'],['channel','Создать канал','campaign'],['music','Открыть медиатеку','library_music'],['settings','Открыть настройки','settings'],['theme','Переключить ночной режим','dark_mode']];
+ const dialog=modal('Быстрые команды','Палитра vovchikGram · Ctrl+K',commands.map(([id,label,icon])=>'<button type="button" class="command-item" data-command="'+id+'"><span class="material-symbols-rounded">'+icon+'</span>'+label+'</button>').join(''));
+ dialog.querySelectorAll('[data-command]').forEach(button=>button.onclick=()=>{
+  const action=button.dataset.command;closeModal();
+  if(action==='search'){$('#searchInput').focus();showRecentSearches()}
+  else if(action==='create')createChat('group');
+  else if(action==='channel')createChat('channel');
+  else if(action==='music')openMedia();
+  else if(action==='settings')settings();
+  else if(action==='theme'){state.ui.dark=!state.ui.dark;applyTheme(state.theme);localStorage.setItem('vg_ui',JSON.stringify(state.ui));toast(state.ui.dark?'Ночной режим включён':'Светлый режим включён')}
+ });
+ const input=document.createElement('input');input.type='search';input.className='command-search';input.placeholder='Найти команду…';input.setAttribute('aria-label','Поиск команды');dialog.querySelector('.modal-body')?.prepend(input);
+ input?.focus();
+ input?.addEventListener('input',()=>dialog.querySelectorAll('[data-command]').forEach(button=>button.hidden=!button.textContent.toLowerCase().includes(input.value.toLowerCase())));
+}
+document.addEventListener('keydown',e=>{
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openCommandPalette()}
+ if(e.key==='Escape'){closeModal();$('#emojiPicker').classList.add('hidden')}
+});
 
 function installMaterialIconFont(){
  const glyphs=[['☰','menu'],['⌕','search'],['＋','add'],['⚙','settings'],['♫','music_note'],['☾','dark_mode'],['◉','account_circle'],['♧','group_add'],['◈','campaign'],['☺','sentiment_satisfied'],['➤','send'],['▢','content_copy'],['↩','reply'],['✎','edit'],['×','close'],['▶','play_arrow'],['Ⅱ','pause'],['↶','skip_previous'],['↷','skip_next'],['☆','star'],['★','star'],['⌖','push_pin'],['➦','forward'],['🔔','notifications'],['🔕','notifications_off']];
