@@ -102,7 +102,7 @@ async function openChat(id){
    api(`/api/chats/${id}/messages?limit=50`),
    api(`/api/chats/${id}/draft`)
   ]);
-  if(state.active?.id===id)$('#messageInput').value=draftResponse.draft?.body||'';
+  if(state.active?.id===id){$('#messageInput').value=draftResponse.draft?.body||'';$('#messageInput').dispatchEvent(new Event('input',{bubbles:true}))}
   $('#messages').innerHTML='';d.messages.forEach(m=>addMessage(m));
   state.messageHasMore=!!d.hasMore;updateLoadMoreButton();
   $('#messages').scrollTop=$('#messages').scrollHeight;
@@ -258,7 +258,7 @@ function addMessage(m,{prepend=false}={}){
  el.innerHTML='<div class="message-avatar">'+avatar(senderAvatar,senderName,'sender-avatar')+'</div>'+
   '<div class="message-content">'+forwardHeader+'<div class="sender"><b>'+esc(senderName)+'</b> '+(m.sender_is_channel?'':badge(mine?state.user:m))+(m.chat_role==='owner'?'<small class="message-role-chip">Владелец</small>':m.chat_role==='admin'?'<small class="message-role-chip">Админ</small>':'')+'</div>'+
   reply+(m.body?'<p>'+formatMessageBody(m.body)+'</p>':'')+media+
-  '<div class="message-foot"><time>'+time+(m.edited_at?' · изм.':'')+'</time>'+
+  '<div class="message-foot"><time>'+time+(m.edited_at?' · изм.':'')+'</time>'+(state.active?.type==='channel'&&Number(m.view_count)>0?'<small class="channel-view-count">'+m3Icon('visibility')+' '+Number(m.view_count)+'</small>':'')+
   (mine?'<button type="button" class="message-read" data-readers title="'+(Number(m.read_by_count)>0?'Кто прочитал':'Отправлено')+'" aria-label="Кто прочитал">'+m3Icon(Number(m.read_by_count)>0?'done_all':'done')+'</button>':'')+
   forwardCount+'<span class="message-actions">'+
   '<button data-quote-selection class="message-quote-selection" hidden>Цитировать выделенное</button>'+
@@ -572,7 +572,7 @@ async function sendCurrentMessage(){
   const sendAsChannel=!!$('#sendAsChannel')?.checked;
   const d=await api(`/api/chats/${chatId}/messages`,{method:'POST',body:JSON.stringify({body,replyTo:state.replyTo,attachments,sendAsChannel})});
   if(!state.socket?.connected)addMessage(d.message);
-  input.value='';input.style.height='auto';clearTimeout(state.draftTimer);
+  input.value='';input.style.height='auto';$('#messageCharCount').textContent='0 / 4000';$('#messageCharCount').classList.remove('near-limit');clearTimeout(state.draftTimer);
   await api('/api/chats/'+chatId+'/draft',{method:'DELETE'}).catch(()=>{});
   pendingMessageFiles=[];renderAttachmentPreview();hideTransferProgress();
   state.replyTo=null;$('#replyBar').classList.add('hidden');loadChats();
