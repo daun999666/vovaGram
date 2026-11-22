@@ -693,3 +693,14 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .m3-history-entry{padding:10px 12px;margin:8px 0;border-radius:15px;background:var(--surface2)}
 .m3-history-entry small{font-size:10px;color:var(--muted)}
 .m3-history-entry p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+
+
+/* Per-chat drafts and private message hiding */
+.m3-hidden-list{display:flex;flex-direction:column;gap:8px;max-height:min(60vh,520px);overflow:auto}
+.m3-hidden-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:16px;background:var(--surface2)}
+.m3-hidden-item>span{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.m3-hidden-item b,.m3-hidden-item small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m3-hidden-item b{font-size:12px}
+.m3-hidden-item small{font-size:10px;color:var(--muted)}
+.m3-hidden-item button{flex:none}
+#messageInput[data-has-draft="true"]{text-decoration-color:var(--primary)}
