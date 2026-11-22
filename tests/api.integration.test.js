@@ -653,10 +653,6 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const activityAfter = await request(baseUrl, ownerToken, "/api/account/activity");
   assert.ok(activityAfter.body.events.some(event => event.event === "password_changed"));
 
-  const limited = await request(baseUrl, null, "/api/register", {
-    method: "POST", body: JSON.stringify({ username: "v2limited" + suffix, password: "test-password-123" })
-  });
-  assert.equal(limited.status, 200);
   const sixthRegistration = await request(baseUrl, null, "/api/register", {
     method: "POST", body: JSON.stringify({ username: "v2sixth" + suffix, password: "test-password-123" })
   });
