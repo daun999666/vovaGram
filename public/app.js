@@ -790,8 +790,21 @@ function handleSongEnded(){
 }
 $('#audioPlayer').addEventListener('timeupdate',updatePlayerLabels);$('#audioPlayer').addEventListener('durationchange',updatePlayerLabels);$('#audioPlayer').addEventListener('play',updatePlayerLabels);$('#audioPlayer').addEventListener('pause',updatePlayerLabels);$('#audioPlayer').addEventListener('ended',handleSongEnded);
 $('#mediaSeek').oninput=e=>{const a=$('#audioPlayer');if(a.duration)a.currentTime=a.duration*Number(e.target.value)/1000;const p=Number(e.target.value)/10+'%';e.target.style.setProperty('--seek-progress',p);$('#mediaWaveform')?.style.setProperty('--seek-progress',p);updatePlayerLabels()};
-$('#mediaPlayPause').onclick=()=>{const a=$('#audioPlayer');if(!a.src){if(state.songs[0])playSong(state.songs[0]);else toast('Сначала добавь трек');return}if(a.paused)a.play().catch(()=>{});else a.pause()};
+function togglePlayerPlayback(){
+ const a=$('#audioPlayer');
+ if(!a.src){if(state.songs[0])playSong(state.songs[0]);else toast('Сначала добавь трек');return}
+ if(a.paused)a.play().catch(()=>{});else a.pause();
+}
+$('#mediaPlayPause').onclick=togglePlayerPlayback;
 $('#mediaPrevious').onclick=()=>stepSong(-1);$('#mediaNext').onclick=()=>stepSong(1);
+document.addEventListener('keydown',event=>{
+ if(!event.ctrlKey||!event.shiftKey||event.altKey||event.metaKey||event.repeat)return;
+ const target=event.target,tag=String(target?.tagName||'').toUpperCase();
+ if(target?.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(tag))return;
+ if(event.key.toLowerCase()==='p'){event.preventDefault();togglePlayerPlayback()}
+ else if(event.key==='ArrowLeft'){event.preventDefault();stepSong(-1)}
+ else if(event.key==='ArrowRight'){event.preventDefault();stepSong(1)}
+});
 $('#mediaShuffle').onclick=()=>{state.shuffle=!state.shuffle;updatePlayerLabels();toast(state.shuffle?'Перемешивание включено':'Перемешивание выключено')};
 $('#mediaRepeat').onclick=()=>{state.repeatMode=state.repeatMode==='off'?'all':state.repeatMode==='all'?'one':'off';updatePlayerLabels();toast(state.repeatMode==='all'?'Повтор очереди включён':state.repeatMode==='one'?'Повтор трека включён':'Повтор выключен')};
 $('#mediaSpeed').onchange=e=>$('#audioPlayer').playbackRate=Number(e.target.value);
