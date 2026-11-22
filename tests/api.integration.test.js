@@ -384,13 +384,31 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
     method: "PATCH", body: JSON.stringify({ starred: true, archived: true, muted: true, pinned: true })
   });
   assert.equal(starred.status, 200);
-  assert.deepEqual(starred.body.preferences, { archived: 1, starred: 1, muted: 1, pinned: 1 });
+  assert.deepEqual(starred.body.preferences, { archived: 1, starred: 1, muted: 1, pinned: 1, muted_until: 0 });
   const withPreferences = await request(baseUrl, ownerToken, "/api/chats");
   const preferredChat = withPreferences.body.chats.find(x => x.id === chatId);
   assert.equal(preferredChat.is_starred, 1);
   assert.equal(preferredChat.is_archived, 1);
   assert.equal(preferredChat.is_muted, 1);
   assert.equal(preferredChat.is_pinned, 1);
+
+  const timedMute = await request(baseUrl, ownerToken, `/api/chats/${chatId}/preferences`, {
+    method: "PATCH", body: JSON.stringify({ muteMinutes: 60 })
+  });
+  assert.equal(timedMute.status, 200);
+  assert.equal(timedMute.body.preferences.muted, 1);
+  assert.ok(timedMute.body.preferences.muted_until > Math.floor(Date.now() / 1000));
+  assert.ok(timedMute.body.preferences.muted_until <= Math.floor(Date.now() / 1000) + 60 * 60 + 2);
+  const invalidMute = await request(baseUrl, ownerToken, `/api/chats/${chatId}/preferences`, {
+    method: "PATCH", body: JSON.stringify({ muteMinutes: 30 })
+  });
+  assert.equal(invalidMute.status, 400);
+  const unmuted = await request(baseUrl, ownerToken, `/api/chats/${chatId}/preferences`, {
+    method: "PATCH", body: JSON.stringify({ muteMinutes: 0 })
+  });
+  assert.equal(unmuted.status, 200);
+  assert.equal(unmuted.body.preferences.muted, 0);
+  assert.equal(unmuted.body.preferences.muted_until, 0);
 
   const saved = await request(baseUrl, ownerToken, `/api/messages/${second.body.message.id}/save`, { method: "POST", body: "{}" });
   assert.equal(saved.status, 200);
