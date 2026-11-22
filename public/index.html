@@ -36,7 +36,15 @@
  <header class="topbar m3-app-bar"><button class="icon-btn mobile-only" id="openNav">☰</button><div id="topTitle"><b>Добро пожаловать</b><small>Выберите чат или создайте новый</small></div><div class="top-actions m3-toolbar" role="toolbar" aria-label="Действия приложения"><button id="headerSearch" class="icon-btn" title="Поиск">⌕</button><button id="playerBtn" class="icon-btn" title="Плеер">♫</button><button id="accountBtn" class="soft-btn">Войти</button><button id="profileBtn" class="avatar-button" title="Профиль">?</button></div></header>
  <section id="welcome" class="welcome"><div class="welcome-orb">v</div><h1>Твой круг общения.</h1><p>Создавай чаты, собирай каналы и настраивай пространство под себя.</p><button class="filled" id="welcomeCreate">＋ Создать чат</button><div class="welcome-hint">Material You · без подписок · без лишнего</div></section>
  <section id="conversation" class="conversation hidden"><div class="wallpaper" id="wallpaper"></div><div class="chat-banner" id="chatBanner"></div><div id="messages" class="messages"></div><div id="replyBar" class="reply-bar hidden"></div>
- <form id="sendForm" class="composer"><button type="button" id="emojiBtn" class="icon-btn" title="Эмодзи">☺</button><button type="button" id="attachBtn" class="icon-btn" title="Прикрепить фото или файл">＋</button><input id="messageInput" autocomplete="off" placeholder="Написать сообщение…"><button class="send-btn" type="submit">➤</button></form><div id="emojiPicker" class="emoji-picker hidden"></div><input id="messageFilePicker" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><div id="attachmentPreview" class="attachment-preview hidden"></div></section>
+ <form id="sendForm" class="composer"><button type="button" id="emojiBtn" class="icon-btn" title="Эмодзи">☺</button><button type="button" id="attachBtn" class="icon-btn" title="Прикрепить фото или файл">＋</button><input id="messageInput" autocomplete="off" placeholder="Написать сообщение…"><button class="send-btn" type="submit">➤</button></form><div id="emojiPicker" class="emoji-picker hidden"></div><input id="messageFilePicker" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><div id="attachmentPreview" class="attachment-preview hidden"></div>
+ <div class="m3-fab-stack">
+  <div id="chatFabMenu" class="m3-fab-menu hidden" role="menu" aria-label="Быстрые действия">
+   <button type="button" role="menuitem" data-fab-action="attach"><span class="material-symbols-rounded">image</span><span>Прикрепить фото</span></button>
+   <button type="button" role="menuitem" data-fab-action="emoji"><span class="material-symbols-rounded">sentiment_satisfied</span><span>Эмодзи</span></button>
+   <button type="button" role="menuitem" data-fab-action="music"><span class="material-symbols-rounded">library_music</span><span>Медиатека</span></button>
+  </div>
+  <button id="chatFab" class="m3-fab" type="button" aria-label="Быстрые действия" aria-haspopup="menu" aria-expanded="false"><span class="material-symbols-rounded">add</span></button>
+ </div></section>
 </main>
 <aside id="profileSide" class="profile-side hidden"></aside>
 </div>
