@@ -48,6 +48,7 @@ function renderChats(){
   if(archived)return false;
   if(state.folder==='all')return true;
   if(state.folder==='unread')return unread;
+  if(state.folder==='pinned')return !!Number(c.is_pinned);
   if(state.folder==='favorites')return starred;
   return c.type===state.folder;
  });
@@ -56,7 +57,7 @@ function renderChats(){
   const unread=Number(c.unread_count||0);
   return '<button class="chat-item '+(state.active?.id===c.id?'active':'')+'" data-id="'+c.id+'">'+
    avatar(c.avatar,c.title,'chat-avatar')+
-   '<span class="chat-meta"><b>'+esc(c.title)+' '+(c.type==='channel'?'<span class="tiny-verified">◉</span>':'')+(Number(c.is_starred)?'<span class="chat-favorite-mark">★</span>':'')+'</b>'+
+   '<span class="chat-meta"><b>'+esc(c.title)+' '+(c.type==='channel'?'<span class="tiny-verified">◉</span>':'')+(Number(c.is_pinned)?'<span class="chat-pin-mark"><span class="material-symbols-rounded">push_pin</span></span>':'')+(Number(c.is_starred)?'<span class="chat-favorite-mark">★</span>':'')+'</b>'+
    '<small>'+(online?'<i class="chat-presence-dot"></i>':'')+esc(c.last_message||c.description||'Пока нет сообщений')+'</small></span>'+
    '<span class="chat-time">'+(c.last_time?new Date(c.last_time+'Z').toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'')+(unread?'<i class="chat-unread-badge">'+(unread>99?'99+':unread)+'</i>':'')+'</span></button>';
  }).join('')||'<div class="empty">Здесь пока нет чатов</div>';
@@ -508,6 +509,7 @@ async function chatDetails(c){
  const actions='<button class="soft-btn" data-close>Закрыть</button>'+(canEdit?'<button class="filled" id="saveChat">Сохранить</button>':'')+(canDelete?'<button class="danger" id="deleteChannel">'+(c.type==='direct'?'Убрать диалог':canManageDelete?'Удалить пространство':c.type==='channel'?'Покинуть канал':'Покинуть группу')+'</button>':'');
  const preferenceHtml='<div class="chat-preference-actions"><h3>Быстрые настройки</h3>'+
   '<button class="soft-btn" id="toggleChatFavorite"><span class="material-symbols-rounded">'+(Number(c.is_starred)?'star':'star_outline')+'</span>'+(Number(c.is_starred)?'Убрать из избранного':'Добавить в избранное')+'</button>'+
+  '<button class="soft-btn" id="toggleChatPin"><span class="material-symbols-rounded">'+(Number(c.is_pinned)?'keep_off':'push_pin')+'</span>'+(Number(c.is_pinned)?'Открепить чат':'Закрепить чат')+'</button>'+
   '<button class="soft-btn" id="toggleChatArchive"><span class="material-symbols-rounded">'+(Number(c.is_archived)?'unarchive':'archive')+'</span>'+(Number(c.is_archived)?'Вернуть из архива':'Переместить в архив')+'</button>'+
   '<button class="soft-btn" id="toggleChatMute"><span class="material-symbols-rounded">'+(Number(c.is_muted)?'notifications':'notifications_off')+'</span>'+(Number(c.is_muted)?'Включить уведомления':'Отключить уведомления')+'</button>'+
   '<button class="soft-btn" id="openScheduledMessages"><span class="material-symbols-rounded">schedule</span>Отложенные сообщения</button></div>';
@@ -519,10 +521,11 @@ async function chatDetails(c){
    await loadChats();
    if(state.active?.id===c.id)state.active=state.chats.find(x=>x.id===c.id)||state.active;
    closeModal();
-   toast(field==='starred'?(value?'Добавлено в избранное':'Убрано из избранного'):field==='muted'?(value?'Уведомления отключены':'Уведомления включены'):(value?'Перемещено в архив':'Возвращено из архива'));
+   toast(field==='starred'?(value?'Добавлено в избранное':'Убрано из избранного'):field==='pinned'?(value?'Чат закреплён':'Чат откреплён'):field==='muted'?(value?'Уведомления отключены':'Уведомления включены'):(value?'Перемещено в архив':'Возвращено из архива'));
   }catch(e){toast(e.message)}
  };
  $('#toggleChatFavorite').onclick=()=>updatePreference('starred',!Number(c.is_starred));
+ $('#toggleChatPin').onclick=()=>updatePreference('pinned',!Number(c.is_pinned));
  $('#toggleChatArchive').onclick=()=>updatePreference('archived',!Number(c.is_archived));
  $('#toggleChatMute').onclick=()=>updatePreference('muted',!Number(c.is_muted));
  $('#openScheduledMessages').onclick=openScheduledMessages;
