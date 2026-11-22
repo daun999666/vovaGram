@@ -783,3 +783,9 @@ button,.chat-item,.folder,.wall-sample,.palette-item,.m3-split-menu{transition-t
 .attachment-chip .attachment-file-icon{display:grid;place-items:center;width:44px;height:44px;flex:none;border-radius:12px;background:var(--surface3);color:var(--primary);font-size:23px}
 .attachment-chip>span:not(.attachment-file-icon){min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:600px){.message-file-card{width:min(340px,72vw)}.message-video{width:min(360px,78vw);max-height:240px}}
+
+.session-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--outline-variant)}
+.session-row>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.session-row small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.session-current{font-size:11px;color:var(--primary);font-weight:700;white-space:nowrap}
+.session-row .danger{flex:none}
