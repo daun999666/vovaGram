@@ -85,6 +85,8 @@ async function openChat(id){
  }
  $('#messageInput').value='';
  state.active=c;state.replyTo=null;state.messageHasMore=false;state.pins=[];
+ const sendAsChannelControl=$('#sendAsChannelControl');
+ if(sendAsChannelControl){const canPostAsChannel=c.type==='channel'&&['owner','admin'].includes(c.my_role);sendAsChannelControl.classList.toggle('hidden',!canPostAsChannel);$('#sendAsChannel').checked=false}
  $('#replyBar').classList.add('hidden');$('#pinnedMessageBanner').classList.add('hidden');
  $('#welcome').classList.add('hidden');
  const conversation=$('#conversation');
@@ -228,9 +230,9 @@ async function openSavedMessages(){
 function m3Icon(name){return '<span class="material-symbols-rounded" aria-hidden="true">'+name+'</span>'}
 function addMessage(m,{prepend=false}={}){
  const old=$('#msg-'+m.id);if(old)old.remove();
- const mine=String(m.username||'').toLowerCase()===String(state.user?.username||'').toLowerCase();
- const senderName=mine?(state.user?.displayName||state.user?.username||m.username):(m.display_name||m.username||'Пользователь');
- const senderAvatar=mine?(state.user?.avatar||m.avatar):(m.avatar||'');
+ const mine=Number(m.is_mine)===1||String(m.username||'').toLowerCase()===String(state.user?.username||'').toLowerCase();
+ const senderName=m.sender_is_channel?(m.display_name||state.active?.title||'Канал'):mine?(state.user?.displayName||state.user?.username||m.username):(m.display_name||m.username||'Пользователь');
+ const senderAvatar=m.sender_is_channel?(m.avatar||state.active?.avatar||''):mine?(state.user?.avatar||m.avatar):(m.avatar||'');
  let reply='';if(m.reply_to)reply='<div class="reply-preview">Ответ на сообщение #'+Number(m.reply_to)+'</div>';
  const forwardHeader=m.forwarded_from_name?'<div class="message-forward"><span class="material-symbols-rounded">forward</span><span><b>Переслано от '+esc(m.forwarded_from_name)+'</b><small>'+esc(m.forwarded_from_chat_title||'Исходный чат')+'</small></span></div>':'';
  const forwardCount=Number(m.forward_count)>0?'<span class="message-forward-count" title="Количество пересылок"><span class="material-symbols-rounded">forward</span>'+Number(m.forward_count)+'</span>':'';
@@ -251,7 +253,7 @@ function addMessage(m,{prepend=false}={}){
  const el=document.createElement('article');
  el.id='msg-'+m.id;el.dataset.messageId=String(m.id);el.dataset.sender=m.username||'';el.className='message m3-message'+(mine?' mine':'');
  el.innerHTML='<div class="message-avatar">'+avatar(senderAvatar,senderName,'sender-avatar')+'</div>'+
-  '<div class="message-content">'+forwardHeader+'<div class="sender"><b>'+esc(senderName)+'</b> '+badge(mine?state.user:m)+'</div>'+
+  '<div class="message-content">'+forwardHeader+'<div class="sender"><b>'+esc(senderName)+'</b> '+(m.sender_is_channel?'':badge(mine?state.user:m))+'</div>'+
   reply+(m.body?'<p>'+esc(m.body)+'</p>':'')+media+
   '<div class="message-foot"><time>'+time+(m.edited_at?' · изм.':'')+'</time>'+
   (mine?'<button type="button" class="message-read" data-readers title="'+(Number(m.read_by_count)>0?'Кто прочитал':'Отправлено')+'" aria-label="Кто прочитал">'+m3Icon(Number(m.read_by_count)>0?'done_all':'done')+'</button>':'')+
@@ -303,7 +305,8 @@ async function openReactionUsers(messageId,emoji){
 async function reactMessage(id,emoji){try{await api('/api/messages/'+id+'/reaction',{method:'POST',body:JSON.stringify({emoji})})}catch(e){toast(e.message)}}
 function quickReact(m){const options=['👍','❤️','😂','🔥','😮','👏','😢'];const v=prompt('Выбери реакцию:\n'+options.join(' '),'👍');if(v&&[...options,'🎉','😍','💯'].includes(v.trim()))reactMessage(m.id,v.trim())}
 async function createChat(defaultType='group'){
- const m=modal('Создать пространство','Новая группа или публичный канал',`<form id="createForm"><label class="field"><span>Название</span><input name="title" maxlength="60" required placeholder="Например, Друзья"></label><label class="field"><span>Описание</span><textarea name="description" maxlength="250" placeholder="О чём это пространство?"></textarea></label><label class="field"><span>Тип пространства</span><select name="type"><option value="group" ${defaultType==='group'?'selected':''}>Групповой чат</option><option value="channel" ${defaultType==='channel'?'selected':''}>Канал</option></select></label><label class="field"><span>Участники через запятую (необязательно)</span><input name="members" placeholder="user1, user2"></label></form>`,'<button class="soft-btn" data-close>Отмена</button><button class="filled" id="createSubmit">Создать</button>');
+ const m=modal('Создать пространство','Новая группа или публичный канал',`<form id="createForm"><label class="field"><span>Название</span><input name="title" maxlength="60" required placeholder="Например, Друзья"></label><label class="field"><span>Описание</span><textarea name="description" maxlength="250" placeholder="О чём это пространство?"></textarea></label><label class="field"><span>Тип пространства</span><select name="type" id="createSpaceType"><option value="group" ${defaultType==='group'?'selected':''}>Групповой чат</option><option value="channel" ${defaultType==='channel'?'selected':''}>Канал</option></select></label><label class="field" id="createChannelUsernameField" ${defaultType==='channel'?'':'hidden'}><span>Юзернейм канала (необязательно)</span><input name="username" maxlength="32" placeholder="my_channel" pattern="[A-Za-z0-9_]{5,32}"><small class="muted">Публичная ссылка: @username · 5–32 символа</small></label><label class="field"><span>Участники через запятую (необязательно)</span><input name="members" placeholder="user1, user2"></label></form>`,'<button class="soft-btn" data-close>Отмена</button><button class="filled" id="createSubmit">Создать</button>');
+ $('#createSpaceType').onchange=()=>$('#createChannelUsernameField').hidden=$('#createSpaceType').value!=='channel';
  $('#createSubmit').onclick=async()=>{const d=Object.fromEntries(new FormData($('#createForm')));d.members=d.members.split(',').map(x=>x.trim().replace(/^@/,'')).filter(Boolean);try{const r=await api('/api/chats',{method:'POST',body:JSON.stringify(d)});closeModal();await loadChats();openChat(r.chat.id)}catch(e){toast(e.message)}};
 }
 async function findUser(name){
@@ -533,7 +536,8 @@ async function sendCurrentMessage(){
    const up=await uploadFile(file,file.type.startsWith('image/')?'image':'file');
    attachments.push({url:up.url,mime:file.type,name:file.name});
   }
-  const d=await api(`/api/chats/${chatId}/messages`,{method:'POST',body:JSON.stringify({body,replyTo:state.replyTo,attachments})});
+  const sendAsChannel=!!$('#sendAsChannel')?.checked;
+  const d=await api(`/api/chats/${chatId}/messages`,{method:'POST',body:JSON.stringify({body,replyTo:state.replyTo,attachments,sendAsChannel})});
   if(!state.socket?.connected)addMessage(d.message);
   input.value='';input.style.height='auto';clearTimeout(state.draftTimer);
   await api('/api/chats/'+chatId+'/draft',{method:'DELETE'}).catch(()=>{});
@@ -572,7 +576,7 @@ async function chatDetails(c){
     (canManageMembers?'<button class="soft-btn" id="createChatInvite"><span class="material-symbols-rounded">link</span>Создать ссылку-приглашение</button><button class="soft-btn" id="openJoinRequests"><span class="material-symbols-rounded">how_to_reg</span>Заявки на вступление</button>':'')+'</section>';
   }catch(error){memberPanel='<p class="muted">Не удалось загрузить список участников.</p>'}
  }
- const formHtml=`<div class="chat-info-head">${avatar(c.avatar,c.title,'public-avatar')}<div><b>${esc(c.title)}</b><small>${esc(c.description||'')}</small></div></div>${canEdit?`<label class="field"><span>Название</span><input id="chatName" value="${esc(c.title)}"></label><label class="field"><span>Описание</span><textarea id="chatDesc">${esc(c.description||'')}</textarea></label><label class="field"><span>Аватар чата</span><input id="chatAvatarFile" type="file" accept="image/*"></label><label class="field"><span>Обои</span><select id="chatWallpaper"><option value="shapes">Мягкие формы</option><option value="m3forms">Капсулы</option><option value="waves">Дуги</option><option value="dots">Точки</option><option value="plain">Без узора</option><option value="__custom">Своя картинка…</option></select></label><label class="field"><span>Свои обои</span><input id="chatWallpaperFile" type="file" accept="image/png,image/jpeg,image/webp"></label>${canEdit&&c.type==='group'?'<label class="field"><span>Медленный режим</span><select id="chatSlowMode"><option value="0">Выключен</option><option value="5">5 секунд</option><option value="10">10 секунд</option><option value="30">30 секунд</option><option value="60">60 секунд</option></select></label>':''}`:''}<p class="muted">Тип: ${c.type==='channel'?'канал':c.type==='group'?'группа':'личный диалог'}</p>${canDelete?`<p class="muted">${deleteDescription}</p>`:''}`;
+ const formHtml=`<div class="chat-info-head">${avatar(c.avatar,c.title,'public-avatar')}<div><b>${esc(c.title)}</b><small>${esc(c.description||'')}</small>${c.type==='channel'&&c.username?'<small>@'+esc(c.username)+'</small>':''}</div></div>${canEdit?`<label class="field"><span>Название</span><input id="chatName" value="${esc(c.title)}"></label><label class="field"><span>Описание</span><textarea id="chatDesc">${esc(c.description||'')}</textarea></label>${c.type==='channel'?'<label class="field"><span>Юзернейм канала</span><input id="chatUsername" maxlength="32" pattern="[A-Za-z0-9_]{5,32}" value="'+esc(c.username||'')+'" placeholder="my_channel"><small class="muted">5–32 символа: латиница, цифры и _</small></label>':''}<label class="field"><span>Аватар чата</span><input id="chatAvatarFile" type="file" accept="image/*"></label><label class="field"><span>Обои</span><select id="chatWallpaper"><option value="shapes">Мягкие формы</option><option value="m3forms">Капсулы</option><option value="waves">Дуги</option><option value="dots">Точки</option><option value="plain">Без узора</option><option value="__custom">Своя картинка…</option></select></label><label class="field"><span>Свои обои</span><input id="chatWallpaperFile" type="file" accept="image/png,image/jpeg,image/webp"></label>${canEdit&&c.type==='group'?'<label class="field"><span>Медленный режим</span><select id="chatSlowMode"><option value="0">Выключен</option><option value="5">5 секунд</option><option value="10">10 секунд</option><option value="30">30 секунд</option><option value="60">60 секунд</option></select></label>':''}`:''}<p class="muted">Тип: ${c.type==='channel'?'канал':c.type==='group'?'группа':'личный диалог'}</p>${canDelete?`<p class="muted">${deleteDescription}</p>`:''}`;
  const actions='<button class="soft-btn" data-close>Закрыть</button>'+(canEdit?'<button class="filled" id="saveChat">Сохранить</button>':'')+(canDelete?'<button class="danger" id="deleteChannel">'+(c.type==='direct'?'Убрать диалог':canManageDelete?'Удалить пространство':c.type==='channel'?'Покинуть канал':'Покинуть группу')+'</button>':'');
  const preferenceHtml='<div class="chat-preference-actions"><h3>Быстрые настройки</h3>'+
   '<button class="soft-btn" id="toggleChatFavorite"><span class="material-symbols-rounded">'+(Number(c.is_starred)?'star':'star_outline')+'</span>'+(Number(c.is_starred)?'Убрать из избранного':'Добавить в избранное')+'</button>'+
@@ -651,7 +655,7 @@ async function chatDetails(c){
  if(canEdit){
   $('#chatWallpaper').value=(c.wallpaper||'shapes').startsWith('/uploads/')?'__custom':(c.wallpaper||'shapes');
   if($('#chatSlowMode'))$('#chatSlowMode').value=String(c.slow_mode_seconds||0);
-  $('#saveChat').onclick=async()=>{try{let avatarUrl=c.avatar||'',wallpaper=$('#chatWallpaper').value;const f=$('#chatAvatarFile').files[0],wf=$('#chatWallpaperFile').files[0];if(f)avatarUrl=(await uploadFile(f,'image')).url;if(wf)wallpaper=(await uploadFile(wf,'image')).url;else if(wallpaper==='__custom')wallpaper=c.wallpaper||'shapes';await api('/api/chats/'+c.id,{method:'PATCH',body:JSON.stringify({title:$('#chatName').value,description:$('#chatDesc').value,avatar:avatarUrl,wallpaper,slowModeSeconds:$('#chatSlowMode')?Number($('#chatSlowMode').value):Number(c.slow_mode_seconds||0)})});closeModal();await loadChats();openChat(c.id);toast('Чат обновлён')}catch(e){toast(e.message)}};
+  $('#saveChat').onclick=async()=>{try{let avatarUrl=c.avatar||'',wallpaper=$('#chatWallpaper').value;const f=$('#chatAvatarFile').files[0],wf=$('#chatWallpaperFile').files[0];if(f)avatarUrl=(await uploadFile(f,'image')).url;if(wf)wallpaper=(await uploadFile(wf,'image')).url;else if(wallpaper==='__custom')wallpaper=c.wallpaper||'shapes';await api('/api/chats/'+c.id,{method:'PATCH',body:JSON.stringify({title:$('#chatName').value,description:$('#chatDesc').value,avatar:avatarUrl,wallpaper,slowModeSeconds:$('#chatSlowMode')?Number($('#chatSlowMode').value):Number(c.slow_mode_seconds||0),username:$('#chatUsername')?$('#chatUsername').value.trim():undefined})});closeModal();await loadChats();openChat(c.id);toast('Чат обновлён')}catch(e){toast(e.message)}};
  }
  if(canDelete) $('#deleteChannel').onclick=async()=>{
   if(!confirm(c.type==='direct'?`Убрать диалог «${c.title}» из твоего списка?`:`Удалить ${c.type==='channel'?'канал':'группу'} «${c.title}» вместе со всеми сообщениями и участниками? Это действие нельзя отменить.`))return;
