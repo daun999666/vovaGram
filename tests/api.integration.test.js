@@ -116,10 +116,32 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   const unreadBefore = await request(baseUrl, ownerToken, "/api/chats");
   assert.equal(unreadBefore.body.chats.find(x => x.id === chatId).unread_count, 2);
 
-  const searched = await request(baseUrl, ownerToken, "/api/search/messages?q=second%20message");
+  const edited = await request(baseUrl, ownerToken, `/api/messages/${first.body.message.id}`, {
+    method: "PATCH", body: JSON.stringify({ body: "first message edited" })
+  });
+  assert.equal(edited.status, 200);
+  const editHistory = await request(baseUrl, ownerToken, `/api/messages/${first.body.message.id}/edits`);
+  assert.equal(editHistory.status, 200);
+  assert.equal(editHistory.body.edits.length, 1);
+  assert.equal(editHistory.body.edits[0].body, "first message");
+
+  const searched = await request(baseUrl, ownerToken, "/api/search/messages?q=first%20message%20edited");
   assert.equal(searched.status, 200);
   assert.equal(searched.body.messages.length, 1);
-  assert.equal(searched.body.messages[0].id, second.body.message.id);
+  assert.equal(searched.body.messages[0].id, first.body.message.id);
+
+  const targetChat = await request(baseUrl, ownerToken, "/api/chats", {
+    method: "POST", body: JSON.stringify({ title: "v2 forward target", type: "group" })
+  });
+  assert.equal(targetChat.status, 200);
+  const forwarded = await request(baseUrl, ownerToken, `/api/messages/${second.body.message.id}/forward`, {
+    method: "POST", body: JSON.stringify({ chatId: targetChat.body.chat.id })
+  });
+  assert.equal(forwarded.status, 200);
+  assert.equal(forwarded.body.message.forwarded_from_name, "V2 Member");
+  const forwardedHistory = await request(baseUrl, ownerToken, `/api/chats/${targetChat.body.chat.id}/messages`);
+  assert.equal(forwardedHistory.body.messages[0].body, "second message");
+  assert.equal(forwardedHistory.body.messages[0].forwarded_from_name, "V2 Member");
 
   const starred = await request(baseUrl, ownerToken, `/api/chats/${chatId}/preferences`, {
     method: "PATCH", body: JSON.stringify({ starred: true, archived: true })
