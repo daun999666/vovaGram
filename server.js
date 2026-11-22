@@ -559,8 +559,9 @@ app.get("/api/chats/:id/messages",auth,(req,res)=>{
     const viewed=rows.filter(message=>message.internal_sender_id!==req.user.id).map(message=>message.id);
     const markView=q("INSERT OR IGNORE INTO channel_post_views(message_id,user_id) VALUES(?,?)");
     for(const messageId of viewed)markView.run(messageId,req.user.id);
-    for(const message of rows){message.view_count=q("SELECT COUNT(*) AS n FROM channel_post_views WHERE message_id=?").get(message.id).n;delete message.internal_sender_id;}
+    for(const message of rows)message.view_count=q("SELECT COUNT(*) AS n FROM channel_post_views WHERE message_id=?").get(message.id).n;
   }
+  for(const message of rows)delete message.internal_sender_id;
   const hasMore=rows.length>limit;
   const messages=rows.slice(0,limit).reverse();
   res.json({messages,hasMore,nextCursor:messages[0]?.id||null});
