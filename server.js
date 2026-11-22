@@ -76,6 +76,7 @@ AFTER DELETE ON messages
 BEGIN
   DELETE FROM chat_pins WHERE message_id=OLD.id;
   DELETE FROM saved_messages WHERE message_id=OLD.id;
+  DELETE FROM message_edits WHERE message_id=OLD.id;
 END;
 `);
 function ensureColumn(table, column, definition) {
