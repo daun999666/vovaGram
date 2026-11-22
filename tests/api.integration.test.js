@@ -211,6 +211,43 @@ test("API integration: paging, unread/read markers, saved messages and pins", as
   assert.deepEqual(older.body.messages.map(x => x.body), ["first message"]);
   assert.equal(older.body.hasMore, false);
 
+  const pdfBuffer = Buffer.from("%PDF-1.4\\n% vovchikGram test\\n%%EOF\\n");
+  const pdfUpload = await request(baseUrl, ownerToken, "/api/upload", {
+    method: "POST",
+    body: JSON.stringify({ kind: "file", data: "data:application/pdf;base64," + pdfBuffer.toString("base64") })
+  });
+  assert.equal(pdfUpload.status, 200, JSON.stringify(pdfUpload.body));
+  const invalidPdf = await request(baseUrl, ownerToken, "/api/upload", {
+    method: "POST",
+    body: JSON.stringify({ kind: "file", data: "data:application/pdf;base64," + Buffer.from("not a PDF").toString("base64") })
+  });
+  assert.equal(invalidPdf.status, 415);
+
+  const videoBuffer = Buffer.alloc(16);
+  videoBuffer.write("ftyp", 4, "ascii");
+  const videoUpload = await request(baseUrl, ownerToken, "/api/upload", {
+    method: "POST",
+    body: JSON.stringify({ kind: "file", data: "data:video/mp4;base64," + videoBuffer.toString("base64") })
+  });
+  assert.equal(videoUpload.status, 200, JSON.stringify(videoUpload.body));
+
+  const withFiles = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      body: "PDF and video attachments",
+      attachments: [
+        { url: pdfUpload.body.url, mime: "application/pdf", name: "test.pdf", size: pdfBuffer.length },
+        { url: videoUpload.body.url, mime: "video/mp4", name: "test.mp4", size: videoBuffer.length }
+      ]
+    })
+  });
+  assert.equal(withFiles.status, 200, JSON.stringify(withFiles.body));
+  const attachmentHistory = await request(baseUrl, ownerToken, `/api/chats/${chatId}/messages?limit=100`);
+  const storedAttachments = JSON.parse(attachmentHistory.body.messages.find(x => x.id === withFiles.body.message.id).attachments);
+  assert.equal(storedAttachments.length, 2);
+  assert.equal(storedAttachments[0].name, "test.pdf");
+  assert.equal(storedAttachments[1].mime, "video/mp4");
+
   const scheduledAt = new Date(Date.now() + 1800).toISOString();
   const scheduled = await request(baseUrl, ownerToken, `/api/chats/${chatId}/scheduled`, {
     method: "POST", body: JSON.stringify({ body: "scheduled delivery integration", scheduledAt })
